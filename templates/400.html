@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-12 text-center my-5">
+        <h1 class="display-1">400</h1>
+        <h2 class="mb-4">Некорректный запрос</h2>
+        <p class="mb-4">Сервер не может обработать запрос из-за ошибки на стороне клиента. Проверьте введённые данные и попробуйте снова.</p>
+        <a href="{{ url_for('books.index') }}" class="btn btn-primary">Вернуться на главную</a>
+    </div>
+</div>
+{% endblock %}
