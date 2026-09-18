@@ -51,8 +51,8 @@ app/
 ### 1. Клонирование
 
 ```bash
-git clone <URL_РЕПОЗИТОРИЯ>
-cd DevOps_library-main/app
+git clone https://github.com/KolesnikovaIrina412/DevOps
+cd DevOps/app
 ```
 
 ### 2. Виртуальное окружение
