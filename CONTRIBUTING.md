@@ -26,29 +26,43 @@
 Перед каждым коммитом (и особенно перед MR) необходимо выполнить:
 
 ```bash
-# 1. Убедиться, что зависимости актуальны
+# 1. Убедиться, что PostgreSQL запущен
+#    Windows: services.msc → postgresql-x64-16 → Running
+#    Linux:   systemctl status postgresql
+
+# 2. Убедиться, что переменные окружения заданы
+cat .env
+# Должны быть: SECRET_KEY, DATABASE_URL, AUTH_DATABASE_URL
+
+# 3. Установить зависимости
 pip install -r requirements.txt
 
-# 2. Запустить приложение и проверить работоспособность
+# 4. Запустить приложение
 python app.py
 
-# 3. Проверить healthcheck
+# 5. Проверить healthcheck
 curl http://127.0.0.1:5000/health
 ```
 
 Минимальный чек-лист:
+- [ ] PostgreSQL запущен и доступен.
+- [ ] `.env` содержит корректные `DATABASE_URL` и `AUTH_DATABASE_URL`.
 - [ ] Приложение запускается без ошибок.
 - [ ] `/health` возвращает `"status": "ok"`.
 - [ ] Изменённый функционал проверен вручную (в браузере).
 - [ ] Нет забытых `print()`, `TODO`, отладочного кода.
 - [ ] Нет закомментированных блоков кода.
+- [ ] `.env` **НЕ** попал в коммит (`git status` не показывает `.env`).
+- [ ] `DATABASE_URL` в `.env.example` **не содержит реальных паролей**.
 
 ## 3. Запрещённые действия
 
 | Действие | Почему запрещено |
 | :--- | :--- |
 | Прямой коммит в `main` | Нарушает процесс ревью, ломает историю |
-| Коммит файла `.env` | Содержит секреты (`SECRET_KEY` и др.) |
+| Коммит файла `.env` | Содержит секреты: `SECRET_KEY`, пароли PostgreSQL |
+| Коммит реальных паролей в `.env.example` | `.env.example` — только плейсхолдеры |
+| Коммит SQLite-БД (`*.db`) | Устаревшие, не должны попадать в репозиторий |
 | Коммит `__pycache__/`, `.venv/` | Мусор, генерируется автоматически |
 | Коммит больших бинарных файлов (> 10 МБ) | Засоряет репозиторий |
 | `git push --force` в `main` | Уничтожает чужие изменения |
@@ -86,17 +100,17 @@ git checkout -b feature/healthcheck-endpoint
 Делайте **несколько небольших коммитов** по ходу работы, а не один гигантский в конце. Каждый коммит — логически завершённый шаг.
 
 ```bash
-git add app.py version.py
-git commit -m "feat: добавлен маршрут /health"
+git add config.py requirements.txt
+git commit -m "feat: переход на PostgreSQL"
 
-git add README.md
-git commit -m "docs: описан healthcheck в README"
+git add scripts/migrate_sqlite_to_pg.py
+git commit -m "feat: скрипт миграции данных"
 ```
 
 ### Шаг 4. Запушить ветку
 
 ```bash
-git push -u origin feature/healthcheck-endpoint
+git push -u origin feature/postgresql-migration
 ```
 
 ### Шаг 5. Создать Merge Request
@@ -118,8 +132,8 @@ git push -u origin feature/healthcheck-endpoint
 После слияния ветку можно удалить:
 
 ```bash
-git branch -d feature/healthcheck-endpoint
-git push origin --delete feature/healthcheck-endpoint
+git branch -d feature/postgresql-migration
+git push origin --delete feature/postgresql-migration
 ```
 
 ## 5. Порядок приёмки
