@@ -8,7 +8,8 @@
 - **Flask 3.0.3** — веб-фреймворк
 - **Flask-SQLAlchemy 3.1.1** — ORM для работы с БД
 - **Flask-Login 0.6.3** — аутентификация и сессии
-- **SQLite** — реляционная БД (`library.db`, `users.db`)
+- **PostgreSQL 16** — реляционная СУБД
+- **psycopg2** — драйвер PostgreSQL для Python
 - **Jinja2** — шаблонизатор
 - **Bootstrap 5** — вёрстка
 - **Pillow** — обработка обложек
@@ -18,8 +19,10 @@
 ````
 app/
 ├── instance/
-│ ├── library.db # книги, жанры, филиалы, экземпляры, выдачи
-│ └── users.db # роли и пользователи
+│ ├── library_dump.sql # дамп PostgreSQL (книги, жанры, филиалы, экземпляры)
+│ └── users_dump.sql # дамп PostgreSQL (роли, пользователи)
+├── scripts/
+│ └── migrate_sqlite_to_pg.py # миграция данных SQLite → PostgreSQL
 ├── static/
 │ ├── images/ # обложки и аватары
 │ └── styles.css
@@ -51,11 +54,53 @@ app/
 ### 1. Клонирование
 
 ```bash
-git clone https://github.com/KolesnikovaIrina412/DevOps
+git clone https://github.com/KolesnikovaIrina412/DevOps.git
 cd DevOps/app
 ```
 
-### 2. Виртуальное окружение
+### 2. Установка и настройка PostgreSQL
+
+1. Установить **PostgreSQL 16** (Windows: официальный установщик, Linux: `apt install postgresql`).
+2. Создать пользователя и базы данных (под `postgres`):
+
+   ```sql
+   CREATE USER app_user WITH PASSWORD 'заменить_на_пароль';
+   CREATE DATABASE library OWNER postgres;
+   CREATE DATABASE users   OWNER postgres;
+   GRANT CONNECT ON DATABASE library TO app_user;
+   GRANT CONNECT ON DATABASE users   TO app_user;
+   ```
+
+3. Загрузить дампы:
+
+   ```bash
+   psql -U postgres -d library -f instance/library_dump.sql
+   psql -U postgres -d users   -f instance/users_dump.sql
+   ```
+
+4. Настроить права для `app_user` (под `postgres`):
+
+   ```sql
+   \c library
+   GRANT USAGE ON SCHEMA public TO app_user;
+   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
+   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;
+   ALTER DEFAULT PRIVILEGES IN SCHEMA public
+       GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
+   ALTER DEFAULT PRIVILEGES IN SCHEMA public
+       GRANT USAGE, SELECT ON SEQUENCES TO app_user;
+
+   \c users
+   GRANT USAGE ON SCHEMA public TO app_user;
+   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
+   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;
+   ALTER DEFAULT PRIVILEGES IN SCHEMA public
+       GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
+   ALTER DEFAULT PRIVILEGES IN SCHEMA public
+       GRANT USAGE, SELECT ON SEQUENCES TO app_user;
+   ```
+
+### 3. Виртуальное окружение
 
 ```bash
 # Windows (PowerShell)
@@ -67,15 +112,15 @@ python3.11 -m venv .venv
 source .venv/bin/activate
 ```
 
-### 3. Установка зависимостей
+### 4. Установка зависимостей
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Настройка переменных окружения
+### 5. Настройка переменных окружения
 
-Скопировать `.env.example` в `.env` и заполнить значения:
+Скопируй `.env.example` в `.env` и заполни значения:
 
 ```bash
 # Windows
@@ -91,7 +136,7 @@ cp .env.example .env
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-### 5. Запуск
+### 6. Запуск
 
 ```bash
 python app.py
@@ -100,7 +145,7 @@ python app.py
 Приложение будет доступно по адресу: <http://127.0.0.1:5000>
 
 При первом запуске автоматически создаются:
-- таблицы в обеих БД (`library.db`, `users.db`);
+- таблицы в обеих БД (если их нет);
 - роли `admin` и `user`;
 - тестовые пользователи;
 - список жанров.
@@ -119,10 +164,10 @@ python app.py
 | Переменная | Описание | Значение по умолчанию |
 | :--- | :--- | :--- |
 | `SECRET_KEY` | Секретный ключ для сессий и CSRF | `dev-secret-key-change-me` |
+| `DATABASE_URL` | Подключение к БД `library` | `postgresql+psycopg2://app_user:app_password@localhost:5432/library` |
+| `AUTH_DATABASE_URL` | Подключение к БД `users` | `postgresql+psycopg2://app_user:app_password@localhost:5432/users` |
 | `MAX_CONTENT_LENGTH` | Максимальный размер загружаемого файла (байты) | `16777216` (16 МБ) |
 | `FLASK_DEBUG` | Режим отладки: `1` — вкл, `0` — выкл | `0` |
-
-> ⚠️ Пути к БД (`library.db`, `users.db`) и папке загрузок формируются автоматически в `config.py` и не требуют указания в `.env`.
 
 ## API
 
@@ -184,7 +229,7 @@ python app.py
 
 ## Схема данных
 
-### `library.db` (основная БД)
+### `library` (основная БД)
 
 ```mermaid
 erDiagram
@@ -260,7 +305,7 @@ erDiagram
 - `branches.id` → `book_copies.branch_id` — one-to-many.
 - `book_copies.id` → `book_loans.copy_id` — one-to-many.
 
-### `users.db` (БД пользователей)
+### `users` (БД пользователей)
 
 ```mermaid
 erDiagram
@@ -286,6 +331,20 @@ erDiagram
 **Связи:**
 - `roles.id` → `users.role_id` — one-to-many.
 
+## Миграция данных из SQLite (устаревшая)
+
+Если у вас остались SQLite-БД (`instance/library.db`, `instance/users.db`) из предыдущей версии проекта, их можно перенести в PostgreSQL:
+
+```bash
+python scripts/migrate_sqlite_to_pg.py
+```
+
+Скрипт переносит:
+- `genres`, `books`, `book_genre`, `covers`, `branches`, `book_copies`, `book_loans`
+- `roles`, `users`
+
+⚠️ Файлы обложек (`static/images/cover_*.jpg/png`) не переносятся через БД — они уже лежат на диске. В БД переносятся только метаданные (`filename`, `md5_hash`, `book_id`).
+
 ## Справочные правила предметной области
 
 1. **Баланс экземпляров:** для каждого филиала сумма `available + issued` должна равняться `total`. Проверяется при обновлении статистики филиала (`branches_update`).
@@ -298,4 +357,4 @@ erDiagram
 
 ## Лицензия
 
-Учебный проект. Лабораторная работа №1 по дисциплине «Методологии и практики DevOps».
+Учебный проект. Лабораторная работа №1 и №2 по дисциплине «DevOps».
