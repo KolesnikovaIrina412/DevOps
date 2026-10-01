@@ -7,6 +7,8 @@ venv/
 instance/*.db
 instance/*.db.backup
 instance/*.sqlite3
+instance/*.sql
+instance/*.dump
 .idea/
 .vscode/
 *.swp
