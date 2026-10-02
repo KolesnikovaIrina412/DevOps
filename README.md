@@ -4,63 +4,71 @@
 
 ## Стек технологий
 
-- **Python 3.11**
+- **Python 3.13**
 - **Flask 3.0.3** — веб-фреймворк
 - **Flask-SQLAlchemy 3.1.1** — ORM для работы с БД
 - **Flask-Login 0.6.3** — аутентификация и сессии
-- **PostgreSQL 16** — реляционная СУБД
+- **PostgreSQL 17** — реляционная СУБД
 - **psycopg2** — драйвер PostgreSQL для Python
+- **gunicorn** — WSGI-сервер для продакшена
 - **Jinja2** — шаблонизатор
 - **Bootstrap 5** — вёрстка
 - **Pillow** — обработка обложек
 - **bleach + markdown** — безопасный HTML и разметка описаний
 
 ## Структура проекта
-````
-app/
-├── instance/
-│ ├── library_dump.sql # дамп PostgreSQL (книги, жанры, филиалы, экземпляры)
-│ └── users_dump.sql # дамп PostgreSQL (роли, пользователи)
-├── scripts/
-│ └── migrate_sqlite_to_pg.py # миграция данных SQLite → PostgreSQL
-├── static/
-│ ├── images/ # обложки и аватары
-│ └── styles.css
-├── templates/
-│ ├── 400.html # некорректный запрос
-│ ├── 403.html # доступ запрещён
-│ ├── 404.html # страница не найдена
-│ ├── 413.html # файл слишком большой
-│ ├── 500.html # внутренняя ошибка
-│ ├── base.html # базовый шаблон
-│ ├── book_branches.html # филиалы книги
-│ ├── book_form.html # форма создания/редактирования книги
-│ ├── book_view.html # карточка книги
-│ ├── books_list.html # список книг с поиском и пагинацией
-│ └── login.html # форма входа
-├── app.py # точка входа, маршруты, обработчики ошибок, /health
-├── auth.py # blueprint аутентификации
-├── books.py # blueprint книг и филиалов
-├── config.py # конфигурация из переменных окружения
-├── models.py # модели SQLAlchemy
-├── version.py # версия приложения
-├── requirements.txt
-├── .env.example # шаблон переменных окружения
-└── .gitignore
-````
 
-## Установка и запуск
+```
+app/
+├── instance/                    # runtime-данные (в .gitignore)
+│   └── .gitkeep
+├── scripts/
+│   ├── backup.sh                # резервное копирование БД
+│   ├── restore.sh               # восстановление БД из дампа
+│   ├── deploy.sh                # развёртывание приложения
+│   └── migrate_sqlite_to_pg.py  # миграция данных SQLite → PostgreSQL
+├── static/
+│   ├── images/                  # обложки и аватары
+│   └── styles.css
+├── templates/
+│   ├── 400.html                 # некорректный запрос
+│   ├── 403.html                 # доступ запрещён
+│   ├── 404.html                 # страница не найдена
+│   ├── 413.html                 # файл слишком большой
+│   ├── 500.html                 # внутренняя ошибка
+│   ├── base.html                # базовый шаблон
+│   ├── book_branches.html       # филиалы книги
+│   ├── book_form.html           # форма создания/редактирования книги
+│   ├── book_view.html           # карточка книги
+│   ├── books_list.html          # список книг с поиском и пагинацией
+│   └── login.html               # форма входа
+├── app.py                       # точка входа, маршруты, обработчики ошибок, /health
+├── auth.py                      # blueprint аутентификации
+├── books.py                     # blueprint книг и филиалов
+├── config.py                    # конфигурация из переменных окружения
+├── models.py                    # модели SQLAlchemy
+├── version.py                   # версия приложения
+├── Makefile                     # команды развёртывания и бэкапа
+├── requirements.txt
+├── .env.example                 # шаблон переменных окружения
+├── .gitignore
+├── README.md
+├── CONTRIBUTING.md              # правила внесения изменений
+└── SECURITY.md                  # требования безопасности
+```
+
+## Установка и запуск (локально)
 
 ### 1. Клонирование
 
 ```bash
 git clone https://github.com/KolesnikovaIrina412/DevOps.git
-cd DevOps/app
+cd DevOps
 ```
 
 ### 2. Установка и настройка PostgreSQL
 
-1. Установить **PostgreSQL 16** (Windows: официальный установщик, Linux: `apt install postgresql`).
+1. Установить **PostgreSQL 17** (Windows: официальный установщик, Linux: `apt install postgresql`).
 2. Создать пользователя и базы данных (под `postgres`):
 
    ```sql
@@ -71,20 +79,11 @@ cd DevOps/app
    GRANT CONNECT ON DATABASE users   TO app_user;
    ```
 
-3. Загрузить дампы:
-
-   ```bash
-   psql -U postgres -d library -f instance/library_dump.sql
-   psql -U postgres -d users   -f instance/users_dump.sql
-   ```
-
-4. Настроить права для `app_user` (под `postgres`):
+3. Настроить права для `app_user` (под `postgres`):
 
    ```sql
    \c library
    GRANT USAGE ON SCHEMA public TO app_user;
-   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
-   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;
    ALTER DEFAULT PRIVILEGES IN SCHEMA public
        GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
    ALTER DEFAULT PRIVILEGES IN SCHEMA public
@@ -92,8 +91,6 @@ cd DevOps/app
 
    \c users
    GRANT USAGE ON SCHEMA public TO app_user;
-   GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
-   GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_user;
    ALTER DEFAULT PRIVILEGES IN SCHEMA public
        GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
    ALTER DEFAULT PRIVILEGES IN SCHEMA public
@@ -104,11 +101,11 @@ cd DevOps/app
 
 ```bash
 # Windows (PowerShell)
-py -3.11 -m venv .venv
+py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 # Linux / macOS
-python3.11 -m venv .venv
+python3.13 -m venv .venv
 source .venv/bin/activate
 ```
 
@@ -150,12 +147,32 @@ python app.py
 - тестовые пользователи;
 - список жанров.
 
+## Развёртывание (продакшен)
+
+Развёртывание на **двух серверах** (app-server + db-server) описано в [SECURITY.md](SECURITY.md). Основные команды — через `Makefile`:
+
+```bash
+make help       # справка
+make deploy     # развёртывание приложения (на app-server)
+make backup     # резервная копия БД (на db-server)
+make restore    # восстановление БД из дампа (на db-server)
+```
+
+**Требования к серверу:**
+- Debian 13 без GUI.
+- Пользователь `appuser` без sudo — для запуска приложения.
+- Пользователь `sysadmin` с sudo — для администрирования.
+- systemd-служба `library.service`.
+- Firewall (`ufw`) с минимальным набором портов.
+
 ## Тестовые пользователи
 
 | Роль | Логин | Пароль | Возможности |
 | :--- | :--- | :--- | :--- |
 | Администратор | `admin` | `admin123` | Полный доступ: просмотр, добавление, редактирование, удаление книг, работа с филиалами |
 | Пользователь | `user` | `user123` | Только просмотр книг и информации о филиалах |
+
+⚠️ **В продакшене** эти учётные записи нужно **удалить** или **сменить пароли** сразу после развёртывания.
 
 ## Переменные окружения
 
@@ -210,7 +227,7 @@ python app.py
 ```json
 {
   "status": "ok",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "database": "ok",
   "auth_database": "ok"
 }
@@ -221,7 +238,7 @@ python app.py
 ```json
 {
   "status": "error",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "database": "error: ...",
   "auth_database": "ok"
 }
@@ -333,40 +350,29 @@ erDiagram
 
 ## Данные для демонстрации
 
-Дампы БД (`library_dump.sql`, `users_dump.sql`) **не хранятся в репозитории**, потому что содержат данные (а не код) и могут включать чувствительную информацию.
+Дампы БД (`*.sql`) **не хранятся в репозитории** — они содержат данные, а не код, и могут включать чувствительную информацию. Они передаются **отдельно** (через защищённый канал) или **создаются заново**.
 
 ### Как получить данные
 
-**Вариант 1 — у разработчика.** Запросить дампы через защищённый канал (Telegram, Google Drive, `scp`).
+**Вариант 1 — получить дампы у разработчика.**
+Запросить `library_dump.sql` и `users_dump.sql` через защищённый канал (Telegram, Google Drive, `scp`).
 
-**Вариант 2 — сгенерировать заново.** Если у вас есть SQLite-БД из предыдущей версии:
+**Вариант 2 — сгенерировать заново.**
+Если у вас есть SQLite-БД из предыдущей версии:
 
 ```bash
 python scripts/migrate_sqlite_to_pg.py
 ```
 
-Скрипт переносит:
-- `genres`, `books`, `book_genre`, `covers`, `branches`, `book_copies`, `book_loans`
-- `roles`, `users`
-
 ⚠️ Файлы обложек (`static/images/cover_*.jpg/png`) не переносятся через БД — они уже лежат на диске. В БД переносятся только метаданные (`filename`, `md5_hash`, `book_id`).
 
-**Вариант 3 — создать минимальный набор.** При первом запуске приложения (`python app.py`) `init_db()` создаст:
-
+**Вариант 3 — создать минимальный набор.**
+При первом запуске приложения (`python app.py`) `init_db()` создаст:
 - роли `admin` и `user`;
 - тестовых пользователей `admin/admin123`, `user/user123`;
 - список жанров.
 
-Книги и экземпляры нужно будет добавить вручную через веб-интерфейс.
-
-### Куда положить дампы
-
-Дампы (`*.sql`) кладутся в `instance/` и загружаются:
-
-```bash
-sudo -u postgres psql -d library -f instance/library_dump.sql
-sudo -u postgres psql -d users   -f instance/users_dump.sql
-```
+Книги и экземпляры добавляются вручную через веб-интерфейс.
 
 ## Справочные правила предметной области
 
@@ -378,6 +384,10 @@ sudo -u postgres psql -d users   -f instance/users_dump.sql
 
 Правила работы с репозиторием, обязательные проверки, запрещённые действия и порядок приёмки описаны в отдельном документе — [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Безопасность
+
+Требования безопасности приложения (запрет запуска от root, ограничения портов, хранение секретов) описаны в отдельном документе — [SECURITY.md](SECURITY.md).
+
 ## Лицензия
 
-Учебный проект. Лабораторная работа №1 и №2 по дисциплине «Методологии и практики DevOps».
+Учебный проект. Лабораторная работа №1 и №2 по дисциплине «Методология и практики DevOps».
