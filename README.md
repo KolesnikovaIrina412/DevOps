@@ -17,45 +17,42 @@
 - **bleach + markdown** — безопасный HTML и разметка описаний
 
 ## Структура проекта
-
-```
-app/
-├── instance/                    # runtime-данные (в .gitignore)
-│   └── .gitkeep
-├── scripts/
-│   ├── backup.sh                # резервное копирование БД
-│   ├── restore.sh               # восстановление БД из дампа
-│   ├── deploy.sh                # развёртывание приложения
-│   └── migrate_sqlite_to_pg.py  # миграция данных SQLite → PostgreSQL
-├── static/
-│   ├── images/                  # обложки и аватары
-│   └── styles.css
-├── templates/
-│   ├── 400.html                 # некорректный запрос
-│   ├── 403.html                 # доступ запрещён
-│   ├── 404.html                 # страница не найдена
-│   ├── 413.html                 # файл слишком большой
-│   ├── 500.html                 # внутренняя ошибка
-│   ├── base.html                # базовый шаблон
-│   ├── book_branches.html       # филиалы книги
-│   ├── book_form.html           # форма создания/редактирования книги
-│   ├── book_view.html           # карточка книги
-│   ├── books_list.html          # список книг с поиском и пагинацией
-│   └── login.html               # форма входа
-├── app.py                       # точка входа, маршруты, обработчики ошибок, /health
-├── auth.py                      # blueprint аутентификации
-├── books.py                     # blueprint книг и филиалов
-├── config.py                    # конфигурация из переменных окружения
-├── models.py                    # модели SQLAlchemy
-├── version.py                   # версия приложения
-├── Makefile                     # команды развёртывания и бэкапа
-├── requirements.txt
-├── .env.example                 # шаблон переменных окружения
-├── .gitignore
-├── README.md
-├── CONTRIBUTING.md              # правила внесения изменений
-└── SECURITY.md                  # требования безопасности
-```
+````
+DevOps/                          
+├── app/
+│   ├── instance/
+│   │   ├── library.db            # книги, жанры, филиалы, экземпляры, выдачи
+│   │   └── users.db              # роли и пользователи
+│   ├── static/
+│   │   ├── images/               # обложки и аватары
+│   │   └── styles.css
+│   ├── templates/
+│   │   ├── 400.html              # некорректный запрос
+│   │   ├── 403.html              # доступ запрещён
+│   │   ├── 404.html              # страница не найдена
+│   │   ├── 413.html              # файл слишком большой
+│   │   ├── 500.html              # внутренняя ошибка
+│   │   ├── base.html             # базовый шаблон
+│   │   ├── book_branches.html    # филиалы книги
+│   │   ├── book_form.html        # форма создания/редактирования книги
+│   │   ├── book_view.html        # карточка книги
+│   │   ├── books_list.html       # список книг с поиском и пагинацией
+│   │   └── login.html            # форма входа
+│   ├── app.py                    # точка входа, маршруты, обработчики ошибок, /health
+│   ├── auth.py                   # blueprint аутентификации
+│   ├── books.py                  # blueprint книг и филиалов
+│   ├── config.py                 # конфигурация из переменных окружения
+│   ├── models.py                 # модели SQLAlchemy
+│   ├── version.py                # версия приложения
+│   ├── requirements.txt
+│   ├── .env.example              # шаблон переменных окружения
+│   └── .gitignore
+├── tests/                        
+│   ├── conftest.py               # фикстуры, тестовое приложение, изоляция БД
+│   ├── test_unit.py              # unit + integration
+│   └── test_edge_cases.py        # ошибочные данные, границы, правила
+└── pytest.ini                    # конфигурация pytest (в корне проекта)
+````
 
 ## Установка и запуск (локально)
 
