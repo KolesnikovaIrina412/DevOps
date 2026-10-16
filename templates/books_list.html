@@ -1,6 +1,9 @@
 {% extends 'base.html' %}
 
 {% block content %}
+{% set is_bm = 'bookmarks' in search_filters %}
+{% set is_lk = 'likes' in search_filters %}
+{% set is_rd = 'read' in search_filters %}
 <h1 class="my-4">📚 Список книг</h1>
 
 <div class="card mb-4">
@@ -50,7 +53,7 @@
       <div class="row mb-3">
         <div class="col-md-6">
           <label class="form-label">Возрастное ограничение (можно выбрать несколько)</label>
-          <select name="ages" multiple class="form-select" size="4">
+          <select name="age" multiple class="form-select" size="4">
             {% for age in all_ages %}
               <option value="{{ age }}"
                 {% if age|string in search_ages %}selected{% endif %}>
@@ -59,10 +62,33 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-2 d-flex align-items-end">
+        {% if current_user.is_authenticated %}
+        <div class="col-md-2">
+          <label class="form-label">Мои метки</label>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="filter" value="bookmarks" id="f-bookmarks"
+                     {% if is_bm %}checked{% endif %}>
+              <label class="form-check-label" for="f-bookmarks">Закладки</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="filter" value="likes" id="f-likes"
+                     {% if is_lk %}checked{% endif %}>
+              <label class="form-check-label" for="f-likes">Нравится</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="filter" value="read" id="f-read"
+                     {% if is_rd %}checked{% endif %}>
+              <label class="form-check-label" for="f-read">Прочитано</label>
+            </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="row mb-3">
+        <div class="col-md-3 d-flex align-items-end">
           <button type="submit" class="btn btn-primary w-100">Найти</button>
         </div>
-        <div class="col-md-2 d-flex align-items-end">
+        <div class="col-md-3 d-flex align-items-end">
           <a href="{{ url_for('books.index') }}" class="btn btn-secondary w-100">Сбросить</a>
         </div>
       </div>
@@ -100,6 +126,13 @@
               <br>
               <strong>Возраст:</strong> {{ book.age }}+
             </p>
+            {% if current_user.is_authenticated %}
+            <div class="d-flex gap-2 mt-2 user-actions" data-book-id="{{ book.id }}">
+              <button type="button" class="btn btn-sm btn-outline-warning btn-bookmark" title="Закладка">🔖</button>
+              <button type="button" class="btn btn-sm btn-outline-danger btn-like" title="Нравится">❤️</button>
+              <button type="button" class="btn btn-sm btn-outline-success btn-read" title="Прочитано">✅ Прочитано</button>
+            </div>
+            {% endif %}
           </div>
           <div class="card-footer bg-transparent border-0 pb-3">
             <div class="d-flex flex-wrap gap-2">
@@ -189,5 +222,66 @@
 <div class="text-center mt-4 mb-3">
     <a href="{{ url_for('books.create') }}" class="btn btn-success">+ Добавить книгу</a>
 </div>
+{% endif %}
+{% if current_user.is_authenticated %}
+<script>
+(function () {
+  const uid = {{ current_user.id }};
+  const KEY = (type) => `lib_${uid}_${type}`;
+
+  const load = (type) => JSON.parse(localStorage.getItem(KEY(type)) || '[]');
+  const save = (type, arr) => localStorage.setItem(KEY(type), JSON.stringify(arr));
+  const toggle = (type, id) => {
+    let arr = load(type);
+    if (arr.includes(id)) arr = arr.filter(x => x !== id);
+    else arr.push(id);
+    save(type, arr);
+  };
+
+  document.querySelectorAll('.user-actions').forEach(block => {
+    const id = parseInt(block.dataset.bookId, 10);
+
+    const btnBm = block.querySelector('.btn-bookmark');
+    const btnLk = block.querySelector('.btn-like');
+    const btnRd = block.querySelector('.btn-read');
+
+    const refresh = () => {
+      const isBm = load('bookmarks').includes(id);
+      const isLk = load('likes').includes(id);
+      const isRd = load('read').includes(id);
+
+      btnBm.classList.toggle('btn-warning', isBm);
+      btnBm.classList.toggle('btn-outline-warning', !isBm);
+
+      btnLk.classList.toggle('btn-danger', isLk);
+      btnLk.classList.toggle('btn-outline-danger', !isLk);
+
+      btnRd.classList.toggle('btn-success', isRd);
+      btnRd.classList.toggle('btn-outline-success', !isRd);
+    };
+
+    btnBm.addEventListener('click', () => { toggle('bookmarks', id); refresh(); });
+    btnLk.addEventListener('click', () => { toggle('likes', id); refresh(); });
+    btnRd.addEventListener('click', () => { toggle('read', id); refresh(); });
+
+    refresh();
+  });
+
+  // Фильтрация карточек по выбранным меткам
+  const activeFilters = [];
+  document.querySelectorAll('input[name="filter"]:checked').forEach(cb => activeFilters.push(cb.value));
+
+  if (activeFilters.length) {
+    document.querySelectorAll('.col-md-6.mb-4').forEach(col => {
+      const block = col.querySelector('.user-actions');
+      if (!block) { col.style.display = 'none'; return; }
+      const id = parseInt(block.dataset.bookId, 10);
+
+      const ok = activeFilters.every(f => load(f).includes(id));
+      if (!ok) col.style.display = 'none';
+    });
+  }
+})();
+</script>
 {% endif %}
 {% endblock %}
