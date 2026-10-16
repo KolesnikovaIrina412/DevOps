@@ -1,10 +1,10 @@
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import UserMixin
 from datetime import datetime
+
+from flask_login import UserMixin
+from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash
 
 db = SQLAlchemy()
-
 
 
 class Role(db.Model):
@@ -45,7 +45,6 @@ class User(UserMixin, db.Model):
         return False
 
 
-
 book_genre = db.Table(
     'book_genre',
     db.Column('book_id', db.Integer, db.ForeignKey('books.id', ondelete='CASCADE'), primary_key=True),
@@ -64,7 +63,7 @@ class Cover(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(255), nullable=False)
     mime_type = db.Column(db.String(100), nullable=False)
-    md5_hash = db.Column(db.String(32), nullable=False, unique=True)
+    md5_hash = db.Column(db.String(32), nullable=False)
     book_id = db.Column(db.Integer, db.ForeignKey('books.id', ondelete='CASCADE'), nullable=False)
     book = db.relationship('Book', back_populates='cover', foreign_keys=[book_id])
 
@@ -105,6 +104,21 @@ class BookLoan(db.Model):
     copy = db.relationship('BookCopy', back_populates='loans', foreign_keys=[copy_id])
 
 
+class BookMark(db.Model):
+    __tablename__ = 'book_marks'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, nullable=False)
+    book_id = db.Column(db.Integer, db.ForeignKey('books.id', ondelete='CASCADE'), nullable=False)
+    mark_type = db.Column(db.String(20), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    book = db.relationship('Book', back_populates='marks')
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'book_id', 'mark_type', name='uq_user_book_mark'),
+    )
+
+
 class Book(db.Model):
     __tablename__ = 'books'
     id = db.Column(db.Integer, primary_key=True)
@@ -122,6 +136,13 @@ class Book(db.Model):
                             cascade='all, delete-orphan', foreign_keys=[Cover.book_id])
     copies = db.relationship('BookCopy', back_populates='book',
                              cascade='all, delete-orphan', foreign_keys=[BookCopy.book_id])
+    marks = db.relationship('BookMark', back_populates='book',
+                            cascade='all, delete-orphan')
+
+    __table_args__ = (
+        db.Index('ix_books_title', 'title'),
+        db.Index('ix_books_author', 'author'),
+    )
 
     def get_branch_stats(self, branch_id):
         copies = BookCopy.query.filter_by(book_id=self.id, branch_id=branch_id).all()
@@ -189,8 +210,8 @@ class Book(db.Model):
                 BookCopy.book_id == self.id,
                 BookCopy.branch_id == branch_id
             ).order_by(BookLoan.id.desc()).limit(current_pop - popularity).all()
-            for l in loans:
-                db.session.delete(l)
+            for loan in loans:
+                db.session.delete(loan)
 
         db.session.commit()
 

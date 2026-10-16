@@ -9,6 +9,14 @@ instance/*.db.backup
 instance/*.sqlite3
 instance/*.sql
 instance/*.dump
+instance/*.backup
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+*.cover
 .idea/
 .vscode/
 *.swp

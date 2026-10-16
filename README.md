@@ -11,6 +11,10 @@
 - **PostgreSQL 17** — реляционная СУБД
 - **psycopg2** — драйвер PostgreSQL для Python
 - **gunicorn** — WSGI-сервер для продакшена
+- **Alembic 1.13.3** — миграции схемы БД
+- **pytest + pytest-cov** — тестирование и покрытие
+- **flake8** — линтер
+- **bandit** — SAST (статический анализ безопасности)
 - **Jinja2** — шаблонизатор
 - **Bootstrap 5** — вёрстка
 - **Pillow** — обработка обложек
@@ -18,41 +22,50 @@
 
 ## Структура проекта
 ````
-DevOps/                          
-├── app/
-│   ├── instance/
-│   │   ├── library.db            # книги, жанры, филиалы, экземпляры, выдачи
-│   │   └── users.db              # роли и пользователи
-│   ├── static/
-│   │   ├── images/               # обложки и аватары
-│   │   └── styles.css
-│   ├── templates/
-│   │   ├── 400.html              # некорректный запрос
-│   │   ├── 403.html              # доступ запрещён
-│   │   ├── 404.html              # страница не найдена
-│   │   ├── 413.html              # файл слишком большой
-│   │   ├── 500.html              # внутренняя ошибка
-│   │   ├── base.html             # базовый шаблон
-│   │   ├── book_branches.html    # филиалы книги
-│   │   ├── book_form.html        # форма создания/редактирования книги
-│   │   ├── book_view.html        # карточка книги
-│   │   ├── books_list.html       # список книг с поиском и пагинацией
-│   │   └── login.html            # форма входа
-│   ├── app.py                    # точка входа, маршруты, обработчики ошибок, /health
-│   ├── auth.py                   # blueprint аутентификации
-│   ├── books.py                  # blueprint книг и филиалов
-│   ├── config.py                 # конфигурация из переменных окружения
-│   ├── models.py                 # модели SQLAlchemy
-│   ├── version.py                # версия приложения
-│   ├── requirements.txt
-│   ├── .env.example              # шаблон переменных окружения
-│   └── .gitignore
-├── tests/                        
-│   ├── conftest.py               # фикстуры, тестовое приложение, изоляция БД
-│   ├── test_unit.py              # unit + integration
-│   └── test_edge_cases.py        # ошибочные данные, границы, правила
-└── pytest.ini                    # конфигурация pytest (в корне проекта)
+app/
+├── instance/
+│ └── .gitkeep
+├── migrations/ # миграции Alembic
+│ ├── versions/ # файлы миграций
+│ ├── env.py # настройка окружения Alembic
+│ ├── script.py.mako
+│ └── README
+├── scripts/
+│ ├── backup.sh # резервное копирование БД
+│ ├── restore.sh # восстановление БД
+│ └── deploy.sh # развёртывание приложения
+├── static/
+│ ├── images/ # обложки и аватары
+│ └── styles.css
+├── templates/
+│ ├── 400.html, 403.html, 404.html, 413.html, 500.html
+│ ├── base.html
+│ ├── book_branches.html
+│ ├── book_form.html
+│ ├── book_view.html
+│ ├── books_list.html
+│ └── login.html
+├── tests/
+│ ├── conftest.py # фикстуры, тестовое приложение
+│ ├── test_unit.py # unit + integration
+│ └── test_edge_cases.py # границы и правила
+├── app.py # точка входа, маршруты, /health
+├── auth.py # blueprint аутентификации
+├── books.py # blueprint книг и филиалов
+├── config.py # конфигурация из .env
+├── models.py # модели SQLAlchemy
+├── version.py # версия приложения
+├── Makefile # команды управления
+├── alembic.ini # конфигурация Alembic
+├── pyproject.toml # конфигурация pytest + coverage
+├── requirements.txt
+├── .env.example
+├── .gitignore
+├── README.md
+├── CONTRIBUTING.md
+└── SECURITY.md
 ````
+
 
 ## Установка и запуск (локально)
 
@@ -80,7 +93,7 @@ cd DevOps
 
    ```sql
    \c library
-   GRANT USAGE ON SCHEMA public TO app_user;
+   GRANT USAGE, CREATE ON SCHEMA public TO app_user;
    ALTER DEFAULT PRIVILEGES IN SCHEMA public
        GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_user;
    ALTER DEFAULT PRIVILEGES IN SCHEMA public
@@ -94,40 +107,33 @@ cd DevOps
        GRANT USAGE, SELECT ON SEQUENCES TO app_user;
    ```
 
-### 3. Виртуальное окружение
+> `CREATE` на схему нужен `app_user` для применения миграций Alembic.
+
+### 3. Виртуальное окружение и зависимости
 
 ```bash
-# Windows (PowerShell)
 py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
-# Linux / macOS
-python3.13 -m venv .venv
-source .venv/bin/activate
-```
-
-### 4. Установка зависимостей
-
-```bash
 pip install -r requirements.txt
 ```
 
-### 5. Настройка переменных окружения
-
-Скопируй `.env.example` в `.env` и заполни значения:
+### 4. Настройка переменных окружения
 
 ```bash
-# Windows
 copy .env.example .env
-
-# Linux / macOS
-cp .env.example .env
 ```
 
-Сгенерировать надёжный `SECRET_KEY`:
+Сгенерировать `SECRET_KEY`:
 
 ```bash
 python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+### 5. Применение миграций
+
+```bash
+alembic upgrade head
 ```
 
 ### 6. Запуск
@@ -136,20 +142,52 @@ python -c "import secrets; print(secrets.token_hex(32))"
 python app.py
 ```
 
-Приложение будет доступно по адресу: <http://127.0.0.1:5000>
+Приложение: <http://127.0.0.1:5000>
 
-При первом запуске автоматически создаются:
-- таблицы в обеих БД (если их нет);
-- роли `admin` и `user`;
-- тестовые пользователи;
-- список жанров.
+## Тесты и проверки
 
-## Развёртывание (продакшен)
-
-Развёртывание на **двух серверах** (app-server + db-server) описано в [SECURITY.md](SECURITY.md). Основные команды — через `Makefile`:
+Все основные команды — через `Makefile`:
 
 ```bash
 make help       # справка
+make setup      # первичная настройка (venv, зависимости, .env)
+make run        # локальный запуск приложения
+make test       # тесты с отчётом покрытия
+make quality    # линтер (flake8) + SAST (bandit)
+make migrate    # применить миграции Alembic
+make verify     # полный набор проверок (test + quality + migrate)
+```
+
+**Требования к качеству:**
+- Покрытие тестами — **≥ 40%** (зафиксировано в `pyproject.toml`).
+- `flake8` — **0 ошибок**.
+- `bandit` — **0 issues**.
+- `pytest` — **все тесты пройдены**.
+
+## Миграции (Alembic)
+
+Проект использует **Alembic** для управления схемой БД.
+
+```bash
+alembic upgrade head                              # применить все миграции
+alembic current                                   # текущая версия
+alembic history                                   # история миграций
+alembic revision --autogenerate -m "описание"     # создать новую миграцию
+alembic downgrade -1                              # откатить последнюю
+```
+
+Файлы миграций — в `migrations/versions/`.
+
+**Список миграций:**
+1. `initial schema` — начальная схема (books, covers, branches, book_copies, book_loans, genres, book_genre).
+2. `add book_marks` — таблица меток пользователя (bookmark/like/read).
+3. `add indexes on books` — индексы `ix_books_title`, `ix_books_author` для поиска.
+
+## Развёртывание (продакшен)
+
+Развёртывание на **двух серверах** (app-server + db-server) описано в [SECURITY.md](SECURITY.md).
+
+```bash
 make deploy     # развёртывание приложения (на app-server)
 make backup     # резервная копия БД (на db-server)
 make restore    # восстановление БД из дампа (на db-server)
@@ -167,7 +205,7 @@ make restore    # восстановление БД из дампа (на db-ser
 | Роль | Логин | Пароль | Возможности |
 | :--- | :--- | :--- | :--- |
 | Администратор | `admin` | `admin123` | Полный доступ: просмотр, добавление, редактирование, удаление книг, работа с филиалами |
-| Пользователь | `user` | `user123` | Только просмотр книг и информации о филиалах |
+| Пользователь | `user` | `user123` | Просмотр книг, филиалов, а также управление личными метками (закладки/нравится/прочитано) |
 
 ⚠️ **В продакшене** эти учётные записи нужно **удалить** или **сменить пароли** сразу после развёртывания.
 
@@ -191,6 +229,7 @@ make restore    # восстановление БД из дампа (на db-ser
 | GET | `/books/` | Список книг с поиском, фильтрацией и пагинацией | Все |
 | GET | `/books/book/<int:book_id>` | Карточка книги | Все |
 | GET | `/books/book/<int:book_id>/branches` | Статистика по филиалам для книги | Все |
+| POST | `/books/book/<int:book_id>/mark` | Переключение метки (bookmark/like/read) | Авторизованные |
 | GET | `/books/book/create` | Форма добавления книги | Только admin |
 | POST | `/books/book/create` | Создание книги | Только admin |
 | GET | `/books/book/<int:book_id>/edit` | Форма редактирования книги | Только admin |
@@ -213,6 +252,7 @@ make restore    # восстановление БД из дампа (на db-ser
 | `genres` | list[int] | ID жанров (можно несколько) |
 | `years` | list[int] | Годы издания (можно несколько) |
 | `age` | list[int] | Возрастные ограничения (можно несколько) |
+| `filter` | list[str] | Метки пользователя: `bookmarks`, `likes`, `read` |
 | `page` | int | Номер страницы (по умолчанию 1, размер 10) |
 
 ## Проверка работоспособности
@@ -224,7 +264,7 @@ make restore    # восстановление БД из дампа (на db-ser
 ```json
 {
   "status": "ok",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "database": "ok",
   "auth_database": "ok"
 }
@@ -235,7 +275,7 @@ make restore    # восстановление БД из дампа (на db-ser
 ```json
 {
   "status": "error",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "database": "error: ...",
   "auth_database": "ok"
 }
@@ -250,6 +290,7 @@ erDiagram
     books ||--o| covers : "books.id → covers.book_id"
     books ||--o{ book_copies : "books.id → book_copies.book_id"
     books ||--o{ book_genre : "books.id → book_genre.book_id"
+    books ||--o{ book_marks : "books.id → book_marks.book_id"
     genres ||--o{ book_genre : "genres.id → book_genre.genre_id"
     branches ||--o{ book_copies : "branches.id → book_copies.branch_id"
     book_copies ||--o{ book_loans : "book_copies.id → book_loans.copy_id"
@@ -309,15 +350,29 @@ erDiagram
         datetime due_date
         datetime created_at
     }
+
+    book_marks {
+        int id PK
+        int user_id
+        int book_id FK
+        string mark_type
+        datetime created_at
+    }
 ```
 
 **Связи:**
 - `books.id` → `covers.book_id` — one-to-one.
 - `books.id` → `book_copies.book_id` — one-to-many.
 - `books.id` → `book_genre.book_id` — one-to-many.
+- `books.id` → `book_marks.book_id` — one-to-many (CASCADE).
 - `genres.id` → `book_genre.genre_id` — one-to-many.
 - `branches.id` → `book_copies.branch_id` — one-to-many.
 - `book_copies.id` → `book_loans.copy_id` — one-to-many.
+
+**Индексы:**
+- `ix_books_title` — на `books.title`.
+- `ix_books_author` — на `books.author`.
+- `uq_user_book_mark` — уникальность `(user_id, book_id, mark_type)`.
 
 ### `users` (БД пользователей)
 
@@ -342,9 +397,6 @@ erDiagram
     }
 ```
 
-**Связи:**
-- `roles.id` → `users.role_id` — one-to-many.
-
 ## Данные для демонстрации
 
 Дампы БД (`*.sql`) **не хранятся в репозитории** — они содержат данные, а не код, и могут включать чувствительную информацию. Они передаются **отдельно** (через защищённый канал) или **создаются заново**.
@@ -352,30 +404,22 @@ erDiagram
 ### Как получить данные
 
 **Вариант 1 — получить дампы у разработчика.**
-Запросить `library_dump.sql` и `users_dump.sql` через защищённый канал (Telegram, Google Drive, `scp`).
+Запросить `library_dump.sql` и `users_dump.sql` через защищённый канал.
 
-**Вариант 2 — сгенерировать заново.**
-Если у вас есть SQLite-БД из предыдущей версии:
+**Вариант 2 — создать минимальный набор.**
+Через веб-интерфейс под `admin/admin123` добавить книги, жанры, филиалы.
 
-```bash
-python scripts/migrate_sqlite_to_pg.py
-```
-
-⚠️ Файлы обложек (`static/images/cover_*.jpg/png`) не переносятся через БД — они уже лежат на диске. В БД переносятся только метаданные (`filename`, `md5_hash`, `book_id`).
-
-**Вариант 3 — создать минимальный набор.**
-При первом запуске приложения (`python app.py`) `init_db()` создаст:
-- роли `admin` и `user`;
-- тестовых пользователей `admin/admin123`, `user/user123`;
-- список жанров.
-
-Книги и экземпляры добавляются вручную через веб-интерфейс.
+**Вариант 3 — заполнить через миграции + UI.**
+После `alembic upgrade head`:
+- `init_db()` создаст роли, пользователей, жанры.
+- Книги и филиалы добавляются вручную через UI.
 
 ## Справочные правила предметной области
 
 1. **Баланс экземпляров:** для каждого филиала сумма `available + issued` должна равняться `total`. Проверяется при обновлении статистики филиала (`branches_update`).
 2. **Дедупликация обложек:** при загрузке обложки вычисляется MD5-хэш. Если такая обложка уже существует — новая запись `Cover` ссылается на тот же файл, а не создаёт дубликат.
-3. **Права доступа:** редактирование и удаление книг, работа с филиалами — только для роли `admin`. Роль `user` имеет доступ только к просмотру.
+3. **Права доступа:** редактирование и удаление книг, работа с филиалами — только для роли `admin`. Роль `user` имеет доступ только к просмотру и к управлению **своими** метками.
+4. **Метки пользователя:** каждая метка (`bookmark`, `like`, `read`) уникальна для пары `(user_id, book_id, mark_type)`. Повторное нажатие удаляет метку.
 
 ## Правила внесения изменений
 
@@ -387,4 +431,4 @@ python scripts/migrate_sqlite_to_pg.py
 
 ## Лицензия
 
-Учебный проект. Лабораторная работа №1 и №2 по дисциплине «Методология и практики DevOps».
+Учебный проект. Лабораторные работы №1, №2, №3 по дисциплине «Методология и практики DevOps».

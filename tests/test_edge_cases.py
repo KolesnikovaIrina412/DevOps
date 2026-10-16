@@ -1,11 +1,9 @@
-"""Ошибочные данные, граничные случаи и обязательные правила."""
 import io
-from models import Book
+from models import db, Book
 from conftest import PNG_BYTES
 
 
 def _form(**overrides):
-    """Базовые валидные данные формы + переопределения."""
     data = {
         'title': 'Книга',
         'description': 'Описание',
@@ -18,10 +16,6 @@ def _form(**overrides):
     data.update(overrides)
     return data
 
-
-# ============================================================
-# ПРАВИЛА ДОСТУПА (роль user/admin)
-# ============================================================
 
 class TestAccessRules:
     def test_anonymous_cannot_create(self, app):
@@ -52,10 +46,6 @@ class TestAccessRules:
             follow_redirects=True)
         assert 'недостаточно прав'.encode() in r.data
 
-
-# ============================================================
-# ОБЯЗАТЕЛЬНЫЕ ПОЛЯ (ТЗ 4.1.1 + 4.1.2)
-# ============================================================
 
 class TestRequiredFields:
     def test_missing_title(self, admin_client):
@@ -91,10 +81,6 @@ class TestRequiredFields:
         assert r.status_code == 400
 
 
-# ============================================================
-# ГРАНИЧНЫЕ ЗНАЧЕНИЯ ГОДА (в books.py: 0 <= year <= 2026)
-# ============================================================
-
 class TestYearBoundaries:
     def test_year_zero_rejected(self, admin_client):
         r = admin_client.post('/book/create', data=_form(year=0),
@@ -119,10 +105,6 @@ class TestYearBoundaries:
         assert r.status_code == 400
 
 
-# ============================================================
-# ФОРМАТ ОБЛОЖКИ
-# ============================================================
-
 class TestCoverFormat:
     def test_wrong_extension_rejected(self, admin_client):
         r = admin_client.post(
@@ -130,18 +112,12 @@ class TestCoverFormat:
             data=_form(cover=(io.BytesIO(b'not an image'), 'file.txt')),
             content_type='multipart/form-data',
             follow_redirects=True)
-        # либо 400, либо flash об ошибке
         assert r.status_code in (200, 400, 302)
         assert 'формат'.encode() in r.data or r.status_code == 400
 
 
-# ============================================================
-# ФИЛИАЛЫ: обязательные правила
-# ============================================================
-
 class TestBranchesRules:
     def test_sum_mismatch_rejected(self, admin_client, sample_book):
-        """available + issued != total → отказ."""
         r = admin_client.post(
             f"/book/{sample_book['book_id']}/branches/update",
             data={'branch_id': sample_book['branch_id'],
@@ -171,15 +147,11 @@ class TestBranchesRules:
                   'total': -5, 'available': -5, 'issued': 0, 'popularity': -3},
             follow_redirects=True)
         with app.app_context():
-            b = Book.query.get(sample_book['book_id'])
+            b = db.session.get(Book, sample_book['book_id'])
             stats = b.get_branch_stats(sample_book['branch_id'])
             assert stats['total'] == 0
             assert stats['popularity'] == 0
 
-
-# ============================================================
-# 404 / обработчики ошибок
-# ============================================================
 
 class TestErrorHandlers:
     def test_unknown_route_404(self, client):

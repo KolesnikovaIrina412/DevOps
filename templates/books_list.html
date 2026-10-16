@@ -98,6 +98,7 @@
 
 <div class="row">
   {% for book in books %}
+  {% set book_marks = user_marks_map.get(book.id, []) %}
   <div class="col-md-6 mb-4">
     <div class="card h-100 shadow-sm">
       <div class="row g-0">
@@ -128,9 +129,18 @@
             </p>
             {% if current_user.is_authenticated %}
             <div class="d-flex gap-2 mt-2 user-actions" data-book-id="{{ book.id }}">
-              <button type="button" class="btn btn-sm btn-outline-warning btn-bookmark" title="Закладка">🔖</button>
-              <button type="button" class="btn btn-sm btn-outline-danger btn-like" title="Нравится">❤️</button>
-              <button type="button" class="btn btn-sm btn-outline-success btn-read" title="Прочитано">✅ Прочитано</button>
+              <button type="button"
+                      class="btn btn-sm {% if 'bookmark' in book_marks %}btn-warning{% else %}btn-outline-warning{% endif %} btn-bookmark"
+                      data-mark-type="bookmark"
+                      title="Закладка">🔖</button>
+              <button type="button"
+                      class="btn btn-sm {% if 'like' in book_marks %}btn-danger{% else %}btn-outline-danger{% endif %} btn-like"
+                      data-mark-type="like"
+                      title="Нравится">❤️</button>
+              <button type="button"
+                      class="btn btn-sm {% if 'read' in book_marks %}btn-success{% else %}btn-outline-success{% endif %} btn-read"
+                      data-mark-type="read"
+                      title="Прочитано">✅ Прочитано</button>
             </div>
             {% endif %}
           </div>
@@ -223,64 +233,45 @@
     <a href="{{ url_for('books.create') }}" class="btn btn-success">+ Добавить книгу</a>
 </div>
 {% endif %}
+
 {% if current_user.is_authenticated %}
 <script>
 (function () {
-  const uid = {{ current_user.id }};
-  const KEY = (type) => `lib_${uid}_${type}`;
-
-  const load = (type) => JSON.parse(localStorage.getItem(KEY(type)) || '[]');
-  const save = (type, arr) => localStorage.setItem(KEY(type), JSON.stringify(arr));
-  const toggle = (type, id) => {
-    let arr = load(type);
-    if (arr.includes(id)) arr = arr.filter(x => x !== id);
-    else arr.push(id);
-    save(type, arr);
-  };
-
   document.querySelectorAll('.user-actions').forEach(block => {
-    const id = parseInt(block.dataset.bookId, 10);
+    const bookId = parseInt(block.dataset.bookId, 10);
 
-    const btnBm = block.querySelector('.btn-bookmark');
-    const btnLk = block.querySelector('.btn-like');
-    const btnRd = block.querySelector('.btn-read');
+    block.querySelectorAll('button[data-mark-type]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const markType = btn.dataset.markType;
 
-    const refresh = () => {
-      const isBm = load('bookmarks').includes(id);
-      const isLk = load('likes').includes(id);
-      const isRd = load('read').includes(id);
+        try {
+          const resp = await fetch(`/book/${bookId}/mark`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({mark_type: markType})
+          });
 
-      btnBm.classList.toggle('btn-warning', isBm);
-      btnBm.classList.toggle('btn-outline-warning', !isBm);
+          if (!resp.ok) return;
 
-      btnLk.classList.toggle('btn-danger', isLk);
-      btnLk.classList.toggle('btn-outline-danger', !isLk);
+          const data = await resp.json();
+          const isActive = data.status === 'added';
 
-      btnRd.classList.toggle('btn-success', isRd);
-      btnRd.classList.toggle('btn-outline-success', !isRd);
-    };
-
-    btnBm.addEventListener('click', () => { toggle('bookmarks', id); refresh(); });
-    btnLk.addEventListener('click', () => { toggle('likes', id); refresh(); });
-    btnRd.addEventListener('click', () => { toggle('read', id); refresh(); });
-
-    refresh();
-  });
-
-  // Фильтрация карточек по выбранным меткам
-  const activeFilters = [];
-  document.querySelectorAll('input[name="filter"]:checked').forEach(cb => activeFilters.push(cb.value));
-
-  if (activeFilters.length) {
-    document.querySelectorAll('.col-md-6.mb-4').forEach(col => {
-      const block = col.querySelector('.user-actions');
-      if (!block) { col.style.display = 'none'; return; }
-      const id = parseInt(block.dataset.bookId, 10);
-
-      const ok = activeFilters.every(f => load(f).includes(id));
-      if (!ok) col.style.display = 'none';
+          if (markType === 'bookmark') {
+            btn.classList.toggle('btn-warning', isActive);
+            btn.classList.toggle('btn-outline-warning', !isActive);
+          } else if (markType === 'like') {
+            btn.classList.toggle('btn-danger', isActive);
+            btn.classList.toggle('btn-outline-danger', !isActive);
+          } else if (markType === 'read') {
+            btn.classList.toggle('btn-success', isActive);
+            btn.classList.toggle('btn-outline-success', !isActive);
+          }
+        } catch (e) {
+          console.error('Mark toggle failed:', e);
+        }
+      });
     });
-  }
+  });
 })();
 </script>
 {% endif %}

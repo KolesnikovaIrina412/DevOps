@@ -3,7 +3,7 @@ import sys
 import base64
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, 'app'))
+sys.path.insert(0, ROOT)
 
 import pytest
 from flask import Flask, jsonify, redirect, url_for
@@ -19,8 +19,7 @@ PNG_BYTES = base64.b64decode(
 
 @pytest.fixture(scope='session')
 def app():
-    """Отдельное Flask-приложение только для тестов."""
-    APP_DIR = os.path.join(ROOT, 'app')
+    APP_DIR = ROOT
 
     test_app = Flask(
         __name__,
@@ -39,7 +38,6 @@ def app():
     )
     os.makedirs(test_app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-    # db.init_app вызывается один раз уже с тестовыми URI, поэтому движок будет SQLite.
     db.init_app(test_app)
 
     login_manager = LoginManager()
@@ -50,15 +48,13 @@ def app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        return User.query.get(int(user_id))
+        return db.session.get(User, int(user_id))
 
-    # Регистрируем blueprints
     from books import books_bp
     from auth import auth_bp
     test_app.register_blueprint(books_bp)
     test_app.register_blueprint(auth_bp)
 
-    # Простые обработчики ошибок
     @test_app.errorhandler(400)
     def bad_request(e):
         return '', 400
@@ -98,12 +94,10 @@ def app():
 
 @pytest.fixture(autouse=True)
 def _clean_tables(app):
-    """После каждого теста чистим все пользовательские данные."""
     yield
     with app.app_context():
-        # Сначала ассоциативная таблица
         db.session.execute(book_genre.delete())
-        BookLoan.query.delete() if 'BookLoan' in globals() else None
+        BookLoan.query.delete()
         BookCopy.query.delete()
         Book.query.delete()
         Branch.query.delete()
@@ -177,7 +171,6 @@ def books_dataset(app):
 
 
 def _seed():
-    """Роли, пользователи, жанры."""
     admin_role = Role(name='admin', description='Администратор')
     user_role = Role(name='user', description='Пользователь')
     db.session.add_all([admin_role, user_role])

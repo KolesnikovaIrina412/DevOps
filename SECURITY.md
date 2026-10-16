@@ -24,6 +24,24 @@ PubkeyAuthentication yes
 
 ⚠️ **Вход под root по SSH — запрещён.** Вход по паролю — **запрещён.** Только по SSH-ключу.
 
+### 1.3. Права пользователя БД `app_user`
+
+⚠️ `app_user` имеет **минимально необходимый** набор прав:
+
+| Объект | Права |
+| :--- | :--- |
+| БД `library` | `CONNECT` |
+| БД `users` | `CONNECT` |
+| Схема `public` (в `library`) | `USAGE`, **`CREATE`** (для миграций Alembic) |
+| Схема `public` (в `users`) | `USAGE` |
+| Все таблицы в `library` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| Все таблицы в `users` | `SELECT`, `INSERT`, `UPDATE`, `DELETE` |
+| Все sequences | `USAGE`, `SELECT` |
+
+⚠️ `app_user` **не имеет** `SUPERUSER`, `CREATEDB`, `CREATEROLE`.
+
+⚠️ **Право `CREATE`** на схему `public` **необходимо** для **применения миграций** Alembic (создание таблиц `alembic_version`, `book_marks` и т.д.).
+
 ## 2. Запуск приложения
 
 ### 2.1. Приложение НЕ запускается от root
@@ -131,6 +149,8 @@ sudo ufw enable
 4. **Ограничить доступ к порту `5432`** — только для app-server.
 5. **Установить права `600`** на `.env`.
 6. **Не коммитить `.env`, дампы, БД.**
+7. **Дать `app_user` право `CREATE`** на схему `public` (для миграций Alembic).
+8. **Применить миграции** (`alembic upgrade head`).
 
 ## 6. Что делать при утечке секретов
 
@@ -158,3 +178,5 @@ sudo ufw enable
 - [ ] `.env` — права `600`, в `.gitignore`.
 - [ ] В репозитории **нет** паролей, дампов, `.env`.
 - [ ] Пароли в БД — **хэшированы**.
+- [ ] `app_user` имеет **только** необходимые права (см. п. 1.3).
+- [ ] Миграции Alembic применены (`alembic current` = `head`).
