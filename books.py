@@ -37,6 +37,7 @@ def index():
     search_genres = request.args.getlist('genres')
     search_years = request.args.getlist('years')
     search_ages = request.args.getlist('age')
+    search_filters = request.args.getlist('filter')
 
     query = Book.query
 
@@ -71,6 +72,7 @@ def index():
                            search_genres=search_genres,
                            search_years=search_years,
                            search_ages=search_ages,
+                           search_filters=search_filters,
                            all_genres=all_genres,
                            all_years=all_years,
                            all_ages=all_ages)
