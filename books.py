@@ -1,12 +1,14 @@
-from flask import render_template, request, redirect, url_for, flash, Blueprint
-from flask_login import login_required, current_user
-from models import db, Book, Genre, Cover, Branch
 import hashlib
-import bleach
-from markdown import markdown
 import os
-from PIL import Image
 from io import BytesIO
+
+import bleach
+from flask import render_template, request, redirect, url_for, flash, Blueprint, jsonify
+from flask_login import login_required, current_user
+from markdown import markdown
+from PIL import Image
+
+from models import db, Book, Genre, Cover, Branch, BookMark
 
 books_bp = Blueprint('books', __name__)
 
@@ -24,7 +26,8 @@ def markdown_to_html(text):
 
 
 def compute_md5(file_data):
-    return hashlib.md5(file_data).hexdigest()
+    # usedforsecurity=False: MD5 используется только для дедупликации обложек, не для безопасности
+    return hashlib.md5(file_data, usedforsecurity=False).hexdigest()
 
 
 @books_bp.route('/')
@@ -52,6 +55,19 @@ def index():
     if search_ages:
         query = query.filter(Book.age.in_(search_ages))
 
+    if current_user.is_authenticated and search_filters:
+        mark_type_map = {'bookmarks': 'bookmark', 'likes': 'like', 'read': 'read'}
+        for f in search_filters:
+            mark_type = mark_type_map.get(f)
+            if not mark_type:
+                continue
+            book_ids = db.session.query(BookMark.book_id).filter_by(
+                user_id=current_user.id,
+                mark_type=mark_type
+            ).all()
+            ids = [bid[0] for bid in book_ids]
+            query = query.filter(Book.id.in_(ids))
+
     query = query.order_by(Book.year.desc(), Book.id.desc())
 
     pagination = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -64,6 +80,12 @@ def index():
     all_ages = db.session.query(Book.age).distinct().order_by(Book.age.desc()).all()
     all_ages = [y[0] for y in all_ages if y[0]]
 
+    user_marks_map = {}
+    if current_user.is_authenticated:
+        marks = BookMark.query.filter_by(user_id=current_user.id).all()
+        for m in marks:
+            user_marks_map.setdefault(m.book_id, set()).add(m.mark_type)
+
     return render_template('books_list.html',
                            books=pagination.items,
                            pagination=pagination,
@@ -75,19 +97,20 @@ def index():
                            search_filters=search_filters,
                            all_genres=all_genres,
                            all_years=all_years,
-                           all_ages=all_ages)
+                           all_ages=all_ages,
+                           user_marks_map=user_marks_map)
 
 
 @books_bp.route('/book/<int:book_id>')
 def view(book_id):
-    book = Book.query.get_or_404(book_id)
+    book = db.get_or_404(Book, book_id)
     book.description_html = markdown_to_html(book.description)
     return render_template('book_view.html', book=book)
 
 
 @books_bp.route('/book/<int:book_id>/branches')
 def branches(book_id):
-    book = Book.query.get_or_404(book_id)
+    book = db.get_or_404(Book, book_id)
     branches = Branch.query.order_by(Branch.name).all()
 
     branches_stats = []
@@ -100,6 +123,36 @@ def branches(book_id):
 
     return render_template('book_branches.html', book=book, branches_stats=branches_stats)
 
+
+@books_bp.route('/book/<int:book_id>/mark', methods=['POST'])
+@login_required
+def toggle_mark(book_id):
+    """Переключить метку (bookmark/like/read) для книги текущего пользователя."""
+    book = db.get_or_404(Book, book_id)
+    data = request.get_json(silent=True) or {}
+    mark_type = data.get('mark_type')
+
+    if mark_type not in ('bookmark', 'like', 'read'):
+        return jsonify({'error': 'invalid mark_type'}), 400
+
+    existing = BookMark.query.filter_by(
+        user_id=current_user.id,
+        book_id=book.id,
+        mark_type=mark_type
+    ).first()
+
+    if existing:
+        db.session.delete(existing)
+        db.session.commit()
+        return jsonify({'status': 'removed', 'mark_type': mark_type}), 200
+    else:
+        db.session.add(BookMark(
+            user_id=current_user.id,
+            book_id=book.id,
+            mark_type=mark_type
+        ))
+        db.session.commit()
+        return jsonify({'status': 'added', 'mark_type': mark_type}), 200
 
 
 @books_bp.route('/book/create', methods=['GET', 'POST'])
@@ -155,7 +208,7 @@ def create():
         db.session.flush()
 
         for gid in selected_genres:
-            genre = Genre.query.get(gid)
+            genre = db.session.get(Genre, gid)
             if genre:
                 book.genres.append(genre)
 
@@ -209,7 +262,7 @@ def edit(book_id):
         flash('У вас недостаточно прав для выполнения данного действия', 'danger')
         return redirect(url_for('books.index'))
 
-    book = Book.query.get_or_404(book_id)
+    book = db.get_or_404(Book, book_id)
     genres = Genre.query.order_by(Genre.name).all()
 
     if request.method == 'POST':
@@ -223,7 +276,7 @@ def edit(book_id):
 
         book.genres.clear()
         for gid in selected_genres:
-            genre = Genre.query.get(gid)
+            genre = db.session.get(Genre, gid)
             if genre:
                 book.genres.append(genre)
 
@@ -251,7 +304,7 @@ def delete(book_id):
         flash('У вас недостаточно прав для выполнения данного действия', 'danger')
         return redirect(url_for('books.index'))
 
-    book = Book.query.get_or_404(book_id)
+    book = db.get_or_404(Book, book_id)
     title = book.title
 
     if book.cover:
@@ -259,7 +312,7 @@ def delete(book_id):
         if os.path.exists(cover_path):
             try:
                 os.remove(cover_path)
-            except:
+            except OSError:
                 pass
 
     db.session.delete(book)
@@ -303,7 +356,7 @@ def branches_update(book_id):
         flash('У вас недостаточно прав для выполнения данного действия', 'danger')
         return redirect(url_for('books.index'))
 
-    book = Book.query.get_or_404(book_id)
+    book = db.get_or_404(Book, book_id)
     branch_id = request.form.get('branch_id', type=int)
 
     if not branch_id:
