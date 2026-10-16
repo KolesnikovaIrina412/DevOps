@@ -86,4 +86,4 @@ backup:
 	@bash scripts/backup.sh
 
 restore:
-	@bash scripts/restore.sh
+	@DUMP="$(DUMP)" DB="$(DB)" bash scripts/restore.sh
