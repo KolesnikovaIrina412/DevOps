@@ -213,13 +213,14 @@ make restore    # восстановление БД из дампа (на db-ser
 
 Все настройки читаются из файла `.env` (см. `.env.example`).
 
-| Переменная | Описание | Значение по умолчанию |
-| :--- | :--- | :--- |
-| `SECRET_KEY` | Секретный ключ для сессий и CSRF | `dev-secret-key-change-me` |
-| `DATABASE_URL` | Подключение к БД `library` | `postgresql+psycopg2://app_user:app_password@localhost:5432/library` |
-| `AUTH_DATABASE_URL` | Подключение к БД `users` | `postgresql+psycopg2://app_user:app_password@localhost:5432/users` |
-| `MAX_CONTENT_LENGTH` | Максимальный размер загружаемого файла (байты) | `16777216` (16 МБ) |
-| `FLASK_DEBUG` | Режим отладки: `1` — вкл, `0` — выкл | `0` |
+| Переменная                                                                                         | Описание                                                                                                                                    | Значение по умолчанию                                                    |
+|:---------------------------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------|:-------------------------------------------------------------------------|
+| `SECRET_KEY`                                                                                       | Секретный ключ для сессий и CSRF                                                                                                            | `dev-secret-key-change-me`                                               |
+| `DATABASE_URL`                                                                                     | Подключение к БД `library`                                                                                                                  | `postgresql+psycopg2://app_user:app_password@localhost:5432/library`     |
+| `AUTH_DATABASE_URL`                                                                                | Подключение к БД `users`                                                                                                                    | `postgresql+psycopg2://app_user:app_password@localhost:5432/users`       |
+| `MIGRATION_DATABASE_URL` | Подключение к БД `library` для миграций от пользователя `postgres` | `postgresql+psycopg2://postgres:postgres_password@localhost:5432/library` |
+| `MAX_CONTENT_LENGTH`                                                                               | Максимальный размер загружаемого файла (байты)                                                                                              | `16777216` (16 МБ)                                                       |
+| `FLASK_DEBUG`                                                                                      | Режим отладки: `1` — вкл, `0` — выкл                                                                                                        | `0`                                                                      |
 
 ## API
 
