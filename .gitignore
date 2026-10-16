@@ -4,10 +4,14 @@ __pycache__/
 .venv/
 venv/
 .env
-../.idea/
+instance/*.db
+instance/*.db.backup
+instance/*.sqlite3
+instance/*.sql
+instance/*.dump
+.idea/
 .vscode/
 *.swp
 .DS_Store
 Thumbs.db
 desktop.ini
-.idea/
