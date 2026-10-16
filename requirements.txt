@@ -27,3 +27,7 @@ psycopg2-binary==2.9.10
 Flask-SQLAlchemy==3.1.1
 SQLAlchemy==2.0.54
 gunicorn==21.2.0
+flake8==7.1.1
+bandit==1.7.10
+pytest-cov==6.0.0
+alembic==1.13.3
