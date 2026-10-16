@@ -20,7 +20,7 @@ help:
 	@echo "  make run       - run the application locally"
 	@echo "  make test      - run tests with coverage report"
 	@echo "  make quality   - run linter (flake8) and SAST (bandit)"
-	@echo "  make migrate   - apply Alembic migrations"
+	@echo "  make migrate   - apply Alembic migrations (as DB owner)"
 	@echo "  make verify    - full local check (test + quality + migrate)"
 	@echo ""
 	@echo "Deployment:"
@@ -60,11 +60,17 @@ quality:
 	$(VENV_BIN)/bandit -r . -x ./.venv,./tests,./migrations -q
 	@echo "[quality] Done."
 
+# DDL-миграции требуют прав владельца схемы (postgres).
+# Используем MIGRATION_DATABASE_URL из .env, а если он не задан — DATABASE_URL.
+# .env не читается make автоматически, поэтому подгружаем его через `set -a`.
 migrate:
 	@echo "[migrate] Applying Alembic migrations..."
-	$(VENV_BIN)/alembic upgrade head
+	@set -a; . ./.env; set +a; \
+	 : "$${DATABASE_URL:?DATABASE_URL is not set in .env}"; \
+	 DATABASE_URL="$${MIGRATION_DATABASE_URL:-$$DATABASE_URL}" $(VENV_BIN)/alembic upgrade head
 	@echo "[migrate] Current version:"
-	$(VENV_BIN)/alembic current
+	@set -a; . ./.env; set +a; \
+	 DATABASE_URL="$${MIGRATION_DATABASE_URL:-$$DATABASE_URL}" $(VENV_BIN)/alembic current
 
 verify: test quality migrate
 	@echo ""
