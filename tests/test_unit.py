@@ -1,14 +1,9 @@
-"""Unit-тесты основной логики и интеграционные тесты работы с БД."""
 import hashlib
 import io
 from models import db, User, Book, Genre
 from books import compute_md5, sanitize_html, markdown_to_html
 from conftest import PNG_BYTES
 
-
-# ============================================================
-# UNIT: модели
-# ============================================================
 
 class TestUserModel:
     def test_full_name(self, app):
@@ -89,10 +84,6 @@ class TestBranchStatsModel:
             assert b.get_branch_stats(sample_book['branch_id'])['popularity'] == 3
 
 
-# ============================================================
-# INTEGRATION: авторизация
-# ============================================================
-
 class TestAuth:
     def test_login_page(self, client):
         assert client.get('/auth/login').status_code == 200
@@ -111,17 +102,12 @@ class TestAuth:
 
     def test_logout_requires_login(self, client):
         r = client.get('/auth/logout', follow_redirects=False)
-        print('Location:', r.headers.get('Location'))
         assert r.status_code == 302
 
     def test_logout_works(self, admin_client):
         r = admin_client.get('/auth/logout', follow_redirects=True)
         assert r.status_code == 200
 
-
-# ============================================================
-# INTEGRATION: просмотр книг
-# ============================================================
 
 class TestBookView:
     def test_view_existing(self, client, sample_book):
@@ -132,10 +118,6 @@ class TestBookView:
     def test_view_missing_404(self, client):
         assert client.get('/book/999999').status_code == 404
 
-
-# ============================================================
-# INTEGRATION: поиск (ТЗ 4.1.1)
-# ============================================================
 
 class TestSearch:
     def test_by_title(self, client, books_dataset):
@@ -170,10 +152,6 @@ class TestSearch:
         assert 'Книги не найдены'.encode() in r.data
 
 
-# ============================================================
-# INTEGRATION: пагинация
-# ============================================================
-
 class TestPagination:
     def test_two_pages(self, client, app):
         with app.app_context():
@@ -187,10 +165,6 @@ class TestPagination:
         assert client.get('/?page=1').status_code == 200
         assert client.get('/?page=2').status_code == 200
 
-
-# ============================================================
-# INTEGRATION: CRUD книг (ТЗ 4.1.1)
-# ============================================================
 
 class TestCreateBook:
     def test_create_requires_login(self, client):
@@ -248,10 +222,6 @@ class TestDeleteBook:
             assert db.session.get(Book, sample_book['book_id']) is None
 
 
-# ============================================================
-# INTEGRATION: филиалы (ТЗ 4.1.1)
-# ============================================================
-
 class TestBranches:
     def test_branches_page(self, client, sample_book):
         r = client.get(f"/book/{sample_book['book_id']}/branches")
@@ -280,10 +250,6 @@ class TestBranches:
             assert stats['total'] == 3
             assert stats['popularity'] == 1
 
-
-# ============================================================
-# INTEGRATION: health
-# ============================================================
 
 class TestHealth:
     def test_health(self, client):
