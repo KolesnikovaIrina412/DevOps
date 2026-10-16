@@ -1,15 +1,15 @@
-from flask import jsonify
-from sqlalchemy import text
-from version import __version__
 import os
-from flask import Flask, render_template, redirect, url_for
+
+from flask import Flask, jsonify, redirect, render_template, url_for
 from flask_login import LoginManager
+from sqlalchemy import text
 from werkzeug.security import generate_password_hash
 
 from config import Config
 from models import db, User, Genre, Role
 from books import books_bp
 from auth import auth_bp
+from version import __version__
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -25,7 +25,7 @@ login_manager.login_message_category = 'warning'
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 
 app.register_blueprint(books_bp)
@@ -36,9 +36,9 @@ app.register_blueprint(auth_bp)
 def index():
     return redirect(url_for('books.index'))
 
+
 @app.route('/health')
 def health():
-
     status = {
         'status': 'ok',
         'version': __version__,
