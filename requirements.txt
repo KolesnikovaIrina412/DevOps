@@ -23,3 +23,5 @@ zipp==3.20.2
 bleach==6.1.0
 markdown==3.5.1
 Pillow==10.1.0
+pytest-flask==1.3.0
+pytest-cov==6.0.0
