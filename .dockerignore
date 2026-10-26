@@ -1,0 +1,47 @@
+# --- Git и система ---
+.git
+.gitignore
+__pycache__/
+*.py[cod]
+*$py.class
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Виртуальное окружение и кэш Python ---
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# --- Локальные секреты и данные ---
+.env
+instance/*
+!instance/.gitkeep
+
+# --- Тяжелые дампы и архивы ---
+*.sql
+*.dump
+*.backup
+*.db
+*.sqlite3
+*.tar
+*.zip
+
+# --- Локальные тесты и документация ---
+tests/
+README.md
+CONTRIBUTING.md
+SECURITY.md
+
+# --- Сам Dockerfile ---
+Dockerfile
+.dockerignore
