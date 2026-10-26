@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # --- БАЗА ДАННЫХ ---
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: app_password
+      POSTGRES_DB: library
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d library"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    # Порт наружу НЕ публикуем
+
+  # --- ПРИЛОЖЕНИЕ ---
+  app:
+    build: .
+    image: library-app:1.0
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      # Передаем настройки
+      - SECRET_KEY=super_secret_key_for_prod
+      - DATABASE_URL=postgresql+psycopg2://app_user:app_password@db:5432/library
+      - AUTH_DATABASE_URL=postgresql+psycopg2://app_user:app_password@db:5432/users
+      - MIGRATION_DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/library
+      - FLASK_DEBUG=0
+    depends_on:
+      db:
+        condition: service_healthy # Ждем, пока БД будет готова
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+volumes:
+  postgres_data: # Именованный volume для сохранения данных БД
