@@ -87,3 +87,46 @@ backup:
 
 restore:
 	@DUMP="$(DUMP)" DB="$(DB)" bash scripts/restore.sh
+	
+# Проверка контейнерной среды
+container-check:
+	@echo "1. Проверка тега latest"
+	@if grep -q "latest" Dockerfile docker-compose.yml; then \
+		echo "ОШИБКА: Найден тег latest. Используйте конкретные версии."; exit 1; \
+	else \
+		echo "OK: Тег latest не найден."; \
+	fi
+
+	@echo "2. Проверка запуска от root"
+	@if ! grep -q "USER appuser" Dockerfile; then \
+		echo "ОШИБКА: В Dockerfile не указан непривилегированный пользователь (USER)."; exit 1; \
+	else \
+		echo "OK: Контейнер запускается от appuser."; \
+	fi
+
+	@echo "3. Проверка секретов в Dockerfile"
+	@if grep -iE "SECRET_KEY|PASSWORD|PASSWD" Dockerfile; then \
+		echo "ОШИБКА: В Dockerfile найдены потенциальные секреты."; exit 1; \
+	else \
+		echo "OK: Секретов в Dockerfile не найдено."; \
+	fi
+
+	@echo "4. Проверка healthcheck"
+	@if ! grep -q "HEALTHCHECK" Dockerfile; then \
+		echo "ОШИБКА: В Dockerfile отсутствует HEALTHCHECK."; exit 1; \
+	else \
+		echo "OK: HEALTHCHECK настроен."; \
+	fi
+
+	@echo "5. Проверка публикации порта БД"
+	@if docker compose config | grep -A 5 "db:" | grep -q "published:"; then \
+		echo "ОШИБКА: Порт базы данных опубликован наружу!"; exit 1; \
+	else \
+		echo "OK: Порт БД не публикуется наружу."; \
+	fi
+
+	@echo "6. Проверка валидности compose-файла"
+	@docker compose config -q
+	@echo "OK: Compose-файл валиден."
+
+	@echo "ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ УСПЕШНО!"
