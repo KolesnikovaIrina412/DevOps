@@ -13,11 +13,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 
-# Обновляем setuptools и wheel в /install (pip не трогаем, чтобы не сломать сборку)
+# Обновляем pip, setuptools и wheel
 RUN pip install --no-cache-dir --prefix=/install \
     --index-url https://pypi-mirror.gitverse.ru/simple \
     --trusted-host pypi-mirror.gitverse.ru \
-    --upgrade setuptools wheel
+    --upgrade pip setuptools wheel
 
 # Ставим основные зависимости
 RUN pip install --no-cache-dir --prefix=/install \
@@ -25,13 +25,16 @@ RUN pip install --no-cache-dir --prefix=/install \
     --trusted-host pypi-mirror.gitverse.ru \
     -r requirements.txt
 
+# УДАЛЯЕМ уязвимые вендорные пакеты из setuptools (они нужны только для сборки, а не для работы приложения)
+RUN rm -rf /install/lib/python3.11/site-packages/setuptools/_vendor
+
 
 # ==========================================
 # ЭТАП 2: Рантайм (Финальный образ)
 # ==========================================
 FROM python:3.11-slim
 
-# Обновляем системные пакеты (лечит zlib1g) и ставим нужные библиотеки
+# Обновляем системные пакеты (лечит zlib1g и др.)
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
@@ -41,6 +44,7 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 WORKDIR /app
 
+# Копируем библиотеки из первого этапа (уже без _vendor)
 COPY --from=builder /install /usr/local
 COPY . .
 
