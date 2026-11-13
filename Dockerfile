@@ -13,23 +13,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 
-# Обновляем ТОЛЬКО setuptools и wheel (pip не трогаем, чтобы не сломать сборку)
+# Обновляем setuptools и wheel для сборки
 RUN pip install --no-cache-dir --prefix=/install \
     --index-url https://pypi-mirror.gitverse.ru/simple \
     --trusted-host pypi-mirror.gitverse.ru \
     --upgrade setuptools wheel
 
-# Ставим основные зависимости (используя системный pip)
+# Ставим основные зависимости
 RUN pip install --no-cache-dir --prefix=/install \
     --index-url https://pypi-mirror.gitverse.ru/simple \
     --trusted-host pypi-mirror.gitverse.ru \
     -r requirements.txt
-
-# УДАЛЯЕМ уязвимые вендорные пакеты из setuptools (они нужны только для сборки, а не для работы приложения)
-RUN rm -rf /install/lib/python3.11/site-packages/setuptools/_vendor
-
-# Удаляем сам pip из финального образа, так как он не нужен для работы приложения
-RUN rm -rf /install/lib/python3.11/site-packages/pip* /install/bin/pip*
 
 
 # ==========================================
@@ -37,7 +31,7 @@ RUN rm -rf /install/lib/python3.11/site-packages/pip* /install/bin/pip*
 # ==========================================
 FROM python:3.11-slim
 
-# Обновляем системные пакеты (лечит zlib1g и др.)
+# Обновляем системные пакеты
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
@@ -47,11 +41,26 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 WORKDIR /app
 
-# Копируем библиотеки из первого этапа (уже без _vendor и pip)
+# Копируем библиотеки из первого этапа
 COPY --from=builder /install /usr/local
 COPY . .
 
+# Создаем папку instance и выдаем права
 RUN mkdir -p /app/instance && chown -R appuser:appuser /app
+
+# ФИНАЛЬНАЯ ЗАЧИСТКА: удаляем setuptools, pip и их уязвимые вендорные пакеты.
+# Для работы Gunicorn они не нужны.
+RUN rm -rf /usr/local/lib/python3.11/site-packages/setuptools \
+           /usr/local/lib/python3.11/site-packages/setuptools-* \
+           /usr/local/lib/python3.11/site-packages/pip \
+           /usr/local/lib/python3.11/site-packages/pip-* \
+           /usr/local/lib/python3.11/site-packages/wheel \
+           /usr/local/lib/python3.11/site-packages/wheel-* \
+           /usr/local/lib/python3.11/site-packages/jaraco* \
+           /usr/local/lib/python3.11/site-packages/backports* \
+           /usr/local/lib/python3.11/site-packages/pkg_resources* \
+           /usr/local/bin/pip* \
+           /usr/local/bin/easy_install*
 
 USER appuser
 
