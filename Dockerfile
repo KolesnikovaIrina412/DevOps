@@ -13,13 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 
-# Обновляем pip, setuptools и wheel
+# Обновляем ТОЛЬКО setuptools и wheel (pip не трогаем, чтобы не сломать сборку)
 RUN pip install --no-cache-dir --prefix=/install \
     --index-url https://pypi-mirror.gitverse.ru/simple \
     --trusted-host pypi-mirror.gitverse.ru \
-    --upgrade pip setuptools wheel
+    --upgrade setuptools wheel
 
-# Ставим основные зависимости
+# Ставим основные зависимости (используя системный pip)
 RUN pip install --no-cache-dir --prefix=/install \
     --index-url https://pypi-mirror.gitverse.ru/simple \
     --trusted-host pypi-mirror.gitverse.ru \
@@ -27,6 +27,9 @@ RUN pip install --no-cache-dir --prefix=/install \
 
 # УДАЛЯЕМ уязвимые вендорные пакеты из setuptools (они нужны только для сборки, а не для работы приложения)
 RUN rm -rf /install/lib/python3.11/site-packages/setuptools/_vendor
+
+# (Опционально) Удаляем сам pip из финального образа, так как он не нужен для работы приложения
+RUN rm -rf /install/lib/python3.11/site-packages/pip* /install/bin/pip*
 
 
 # ==========================================
@@ -44,7 +47,7 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 WORKDIR /app
 
-# Копируем библиотеки из первого этапа (уже без _vendor)
+# Копируем библиотеки из первого этапа (уже без _vendor и pip)
 COPY --from=builder /install /usr/local
 COPY . .
 
