@@ -19,10 +19,16 @@
 - **Bootstrap 5** — вёрстка
 - **Pillow** — обработка обложек
 - **bleach + markdown** — безопасный HTML и разметка описаний
+- **Docker + Docker Compose** — контейнеризация
+- **GitHub Actions** — CI/CD пайплайн
+- **Trivy** — сканер уязвимостей контейнеров
 
 ## Структура проекта
 ````
 app/
+├── .github/
+│ └── workflows/
+│ └── ci.yml # CI/CD пайплайн (GitHub Actions)
 ├── instance/
 │ └── .gitkeep
 ├── migrations/ # миграции Alembic
@@ -55,6 +61,8 @@ app/
 ├── config.py # конфигурация из .env
 ├── models.py # модели SQLAlchemy
 ├── version.py # версия приложения
+├── Dockerfile # инструкция сборки контейнера
+├── docker-compose.yml # конфигурация для локального запуска
 ├── Makefile # команды управления
 ├── alembic.ini # конфигурация Alembic
 ├── pyproject.toml # конфигурация pytest + coverage
@@ -65,7 +73,6 @@ app/
 ├── CONTRIBUTING.md
 └── SECURITY.md
 ````
-
 
 ## Установка и запуск (локально)
 
@@ -156,6 +163,7 @@ make test       # тесты с отчётом покрытия
 make quality    # линтер (flake8) + SAST (bandit)
 make migrate    # применить миграции Alembic
 make verify     # полный набор проверок (test + quality + migrate)
+make container-check # проверка Dockerfile и docker-compose
 ```
 
 **Требования к качеству:**
@@ -163,6 +171,28 @@ make verify     # полный набор проверок (test + quality + mig
 - `flake8` — **0 ошибок**.
 - `bandit` — **0 issues**.
 - `pytest` — **все тесты пройдены**.
+
+## CI/CD Пайплайн (Continuous Integration)
+
+Проект использует **GitHub Actions** для автоматизации проверок и сборки. Пайплайн запускается при каждом `push` и `pull_request` в ветку `main`.
+
+Конфигурация пайплайна находится в `.github/workflows/ci.yml`.
+
+### Стадии пайплайна:
+
+1.  **`lint`** — проверка стиля кода (`flake8`) и статический анализ безопасности (`bandit`).
+2.  **`test`** — запуск unit и интеграционных тестов (`pytest`) с проверкой покрытия. В качестве тестовой БД автоматически поднимается контейнер `postgres:17`.
+3.  **`migrate`** — проверка применения миграций Alembic к чистой базе данных.
+4.  **`build-and-publish`**:
+    *   Сборка Docker-образа.
+    *   Сканирование образа на уязвимости с помощью **Trivy** (пайплайн падает при обнаружении CRITICAL/HIGH уязвимостей).
+    *   Публикация образа в **GitHub Container Registry (GHCR)** с тегом, соответствующим `commit SHA`.
+
+### Self-hosted Runner
+Все проверки выполняются на собственном сервере-раннере (Self-hosted Runner), настроенном на базе Debian Linux, что позволяет использовать кэш Docker и выполнять проверки в изолированном окружении.
+
+### Защита веток
+Ветка `main` защищена: прямые коммиты запрещены. Любые изменения проходят только через Pull Request с обязательным прохождением всех стадий CI-пайплайна и одобрением владельца репозитория (файл `.github/CODEOWNERS`).
 
 ## Миграции (Alembic)
 
@@ -213,14 +243,14 @@ make restore    # восстановление БД из дампа (на db-ser
 
 Все настройки читаются из файла `.env` (см. `.env.example`).
 
-| Переменная                                                                                         | Описание                                                                                                                                    | Значение по умолчанию                                                    |
-|:---------------------------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------------------------------------------|:-------------------------------------------------------------------------|
-| `SECRET_KEY`                                                                                       | Секретный ключ для сессий и CSRF                                                                                                            | `dev-secret-key-change-me`                                               |
-| `DATABASE_URL`                                                                                     | Подключение к БД `library`                                                                                                                  | `postgresql+psycopg2://app_user:app_password@localhost:5432/library`     |
-| `AUTH_DATABASE_URL`                                                                                | Подключение к БД `users`                                                                                                                    | `postgresql+psycopg2://app_user:app_password@localhost:5432/users`       |
+| Переменная | Описание | Значение по умолчанию |
+|:---|:---|:---|
+| `SECRET_KEY` | Секретный ключ для сессий и CSRF | `dev-secret-key-change-me` |
+| `DATABASE_URL` | Подключение к БД `library` | `postgresql+psycopg2://app_user:app_password@localhost:5432/library` |
+| `AUTH_DATABASE_URL` | Подключение к БД `users` | `postgresql+psycopg2://app_user:app_password@localhost:5432/users` |
 | `MIGRATION_DATABASE_URL` | Подключение к БД `library` для миграций от пользователя `postgres` | `postgresql+psycopg2://postgres:postgres_password@localhost:5432/library` |
-| `MAX_CONTENT_LENGTH`                                                                               | Максимальный размер загружаемого файла (байты)                                                                                              | `16777216` (16 МБ)                                                       |
-| `FLASK_DEBUG`                                                                                      | Режим отладки: `1` — вкл, `0` — выкл                                                                                                        | `0`                                                                      |
+| `MAX_CONTENT_LENGTH` | Максимальный размер загружаемого файла (байты) | `16777216` (16 МБ) |
+| `FLASK_DEBUG` | Режим отладки: `1` — вкл, `0` — выкл | `0` |
 
 ## API
 
@@ -265,7 +295,7 @@ make restore    # восстановление БД из дампа (на db-ser
 ```json
 {
   "status": "ok",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "database": "ok",
   "auth_database": "ok"
 }
@@ -276,7 +306,7 @@ make restore    # восстановление БД из дампа (на db-ser
 ```json
 {
   "status": "error",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "database": "error: ...",
   "auth_database": "ok"
 }
@@ -432,4 +462,4 @@ erDiagram
 
 ## Лицензия
 
-Учебный проект. Лабораторные работы №1, №2, №3 по дисциплине «Методология и практики DevOps».
+Учебный проект. Лабораторные работы №1, №2, №3, №4, №5 по дисциплине «Методология и практики DevOps».
