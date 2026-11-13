@@ -28,7 +28,7 @@ RUN pip install --no-cache-dir --prefix=/install \
 # УДАЛЯЕМ уязвимые вендорные пакеты из setuptools (они нужны только для сборки, а не для работы приложения)
 RUN rm -rf /install/lib/python3.11/site-packages/setuptools/_vendor
 
-# (Опционально) Удаляем сам pip из финального образа, так как он не нужен для работы приложения
+# Удаляем сам pip из финального образа, так как он не нужен для работы приложения
 RUN rm -rf /install/lib/python3.11/site-packages/pip* /install/bin/pip*
 
 
