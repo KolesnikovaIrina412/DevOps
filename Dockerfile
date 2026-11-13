@@ -13,16 +13,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 
-# Принудительно обновляем pip, setuptools и wheel до безопасных версий
+# Обновляем setuptools и wheel в /install (pip не трогаем, чтобы не сломать сборку)
 RUN pip install --no-cache-dir --prefix=/install \
     --index-url https://pypi-mirror.gitverse.ru/simple \
     --trusted-host pypi-mirror.gitverse.ru \
-    --upgrade pip setuptools wheel
+    --upgrade setuptools wheel
 
+# Ставим основные зависимости
 RUN pip install --no-cache-dir --prefix=/install \
     --index-url https://pypi-mirror.gitverse.ru/simple \
     --trusted-host pypi-mirror.gitverse.ru \
     -r requirements.txt
+
 
 # ==========================================
 # ЭТАП 2: Рантайм (Финальный образ)
