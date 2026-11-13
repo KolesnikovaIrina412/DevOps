@@ -52,7 +52,7 @@ jobs:
       - name: Install dependencies
         run: pip install --break-system-packages -r requirements.txt
       - name: Check migrations
-        run: alembic upgrade head
+        run: python3 -m alembic upgrade head
 
   build-and-publish:
     runs-on: self-hosted
