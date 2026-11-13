@@ -98,5 +98,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Push Docker image
         run: |
-          docker tag library-app:${{ github.sha }} ghcr.io/${{ github.repository }}/library-app:${{ github.sha }}
-          docker push ghcr.io/${{ github.repository }}/library-app:${{ github.sha }}
+          # Переводим имя репозитория в нижний регистр (DevOps -> devops)
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          docker tag library-app:${{ github.sha }} ghcr.io/$REPO_LOWER/library-app:${{ github.sha }}
+          docker push ghcr.io/$REPO_LOWER/library-app:${{ github.sha }}
