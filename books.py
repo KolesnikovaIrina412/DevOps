@@ -51,7 +51,7 @@ def index():
     if search_genres:
         query = query.filter(Book.genres.any(Genre.id.in_(search_genres)))
     if search_years:
-        query = query.filter(Book.year.in_([int(y) + 1 for y in search_years]))
+        query = query.filter(Book.year.in_(search_years))
     if search_ages:
         query = query.filter(Book.age.in_(search_ages))
 
