@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   lint:
     runs-on: self-hosted
@@ -98,7 +102,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Push Docker image
         run: |
-          # Переводим имя репозитория в нижний регистр (DevOps -> devops)
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           docker tag library-app:${{ github.sha }} ghcr.io/$REPO_LOWER/library-app:${{ github.sha }}
           docker push ghcr.io/$REPO_LOWER/library-app:${{ github.sha }}
