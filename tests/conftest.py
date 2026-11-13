@@ -1,16 +1,15 @@
 import os
 import sys
 import base64
+import pytest
+from flask import Flask, jsonify, redirect, url_for
+from flask_login import LoginManager
+from werkzeug.security import generate_password_hash
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-import pytest
-from flask import Flask, jsonify, redirect, url_for
-from flask_login import LoginManager
 from models import db, Role, User, Genre, Book, Branch, BookCopy, BookLoan, book_genre
-from werkzeug.security import generate_password_hash
-
 
 PNG_BYTES = base64.b64decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
