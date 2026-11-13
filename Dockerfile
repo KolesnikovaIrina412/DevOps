@@ -15,6 +15,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Копируем только requirements.txt
 COPY requirements.txt .
+
+# Обновляем pip, wheel и setuptools, чтобы закрыть уязвимости
+RUN pip install --no-cache-dir --upgrade pip wheel setuptools
+
 # Ставим зависимости
 RUN pip install --no-cache-dir --prefix=/install \
     --index-url https://pypi-mirror.gitverse.ru/simple \
