@@ -80,7 +80,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Build Docker image
-        run: docker build -t library-app:${{ github.sha }} .
+        run: docker build --no-cache -t library-app:${{ github.sha }} .
       - name: Security scan of image (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
