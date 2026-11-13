@@ -52,6 +52,10 @@ jobs:
       - name: Install dependencies
         run: pip install --break-system-packages -r requirements.txt
       - name: Check migrations
+        env:
+          DATABASE_URL: postgresql+psycopg2://app_user:app_password@localhost:5432/library
+          AUTH_DATABASE_URL: postgresql+psycopg2://app_user:app_password@localhost:5432/users
+          SECRET_KEY: test-secret-key
         run: python3 -m alembic upgrade head
 
   build-and-publish:
