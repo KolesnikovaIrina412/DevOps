@@ -16,14 +16,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Копируем только requirements.txt
 COPY requirements.txt .
 
-# Обновляем pip, wheel и setuptools, чтобы закрыть уязвимости
-RUN pip install --no-cache-dir --upgrade pip wheel setuptools
+# Обновляем pip, setuptools и wheel, чтобы закрыть уязвимости
+RUN pip install --no-cache-dir --prefix=/install \
+    --index-url https://pypi-mirror.gitverse.ru/simple \
+    --trusted-host pypi-mirror.gitverse.ru \
+    --upgrade pip setuptools wheel
 
-# Ставим зависимости
+# Ставим основные зависимости
 RUN pip install --no-cache-dir --prefix=/install \
     --index-url https://pypi-mirror.gitverse.ru/simple \
     --trusted-host pypi-mirror.gitverse.ru \
     -r requirements.txt
+
+# Принудительно обновляем Pillow до безопасной версии (закрывает CRITICAL уязвимости)
+RUN pip install --no-cache-dir --prefix=/install \
+    --index-url https://pypi-mirror.gitverse.ru/simple \
+    --trusted-host pypi-mirror.gitverse.ru \
+    --upgrade Pillow==13.0.0
 
 
 # ==========================================
@@ -38,7 +47,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Создаем непривилегированного пользователя (Пункт 3)
+# Создаем непривилегированного пользователя
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 WORKDIR /app
