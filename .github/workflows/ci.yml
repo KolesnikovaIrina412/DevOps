@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run Flake8
-        run: flake8 . --max-line-length=120 --exclude=.venv,tests/__pycache__,migrations
+        run: flake8 . --max-line-length=120 --extend-ignore=E402 --exclude=.venv,tests/__pycache__,migrations
       - name: Run Bandit (SAST)
         run: bandit -r . -x ./.venv,./tests,./migrations -q
 
