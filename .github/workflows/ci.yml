@@ -5,10 +5,20 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег образа для деплоя (например, sha или v0.5.0)'
+        required: true
+        default: 'latest'
 
 permissions:
   contents: read
   packages: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   lint:
@@ -93,10 +103,20 @@ jobs:
   build-and-publish:
     runs-on: self-hosted
     needs: migrate
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      - name: Determine tag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+          fi
       - name: Cache Docker layers
         uses: actions/cache@v4
         with:
@@ -105,7 +125,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
       - name: Build Docker image
-        run: docker build --no-cache -t library-app:${{ github.sha }} .
+        run: docker build --no-cache -t library-app:${{ steps.meta.outputs.tag }} .
       - name: Cache Trivy DB
         uses: actions/cache@v4
         with:
@@ -116,7 +136,7 @@ jobs:
       - name: Security scan of image (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'library-app:${{ github.sha }}'
+          image-ref: 'library-app:${{ steps.meta.outputs.tag }}'
           format: 'table'
           exit-code: '1'
           ignore-unfixed: true
@@ -131,13 +151,13 @@ jobs:
       - name: Push Docker image
         run: |
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          docker tag library-app:${{ github.sha }} ghcr.io/$REPO_LOWER/library-app:${{ github.sha }}
-          docker push ghcr.io/$REPO_LOWER/library-app:${{ github.sha }}
+          docker tag library-app:${{ steps.meta.outputs.tag }} ghcr.io/$REPO_LOWER/library-app:${{ steps.meta.outputs.tag }}
+          docker push ghcr.io/$REPO_LOWER/library-app:${{ steps.meta.outputs.tag }}
 
   deploy:
     runs-on: self-hosted
     needs: build-and-publish
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
       - name: Setup SSH
@@ -150,10 +170,15 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
             cd /home/appuser/DevOps_CD
-            sed -i "s|image: ghcr.io/kaplan-m/devops/library-app:.*|image: ghcr.io/kaplan-m/devops/library-app:${{ github.sha }}|" docker-compose.yml
+            # Подставляем тег, который определили в build-and-publish
+            sed -i "s|image: ghcr.io/kaplan-m/devops/library-app:.*|image: ghcr.io/kaplan-m/devops/library-app:${{ needs.build-and-publish.outputs.image_tag }}|" docker-compose.yml
             echo "${{ secrets.GHCR_PUSH_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull app
             docker compose up -d --no-build
             sleep 10
+            # Проверка контейнеров
+            docker compose ps
+            # Проверка healthcheck и версии
             curl -f http://localhost:5001/health || exit 1
+            curl -f http://localhost:5001/version || exit 1
           EOF
