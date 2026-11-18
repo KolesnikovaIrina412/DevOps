@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Тег образа для деплоя (например, v0.5.0 или sha)'
+        description: 'Тег образа для деплоя (например, v0.6.0 или sha)'
         required: true
         default: 'latest'
 
@@ -155,8 +155,22 @@ jobs:
       - name: Push Docker image
         run: |
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          docker tag library-app:${{ steps.meta.outputs.tag }} ghcr.io/$REPO_LOWER/library-app:${{ steps.meta.outputs.tag }}
-          docker push ghcr.io/$REPO_LOWER/library-app:${{ steps.meta.outputs.tag }}
+          IMAGE_TAG="ghcr.io/$REPO_LOWER/library-app:${{ steps.meta.outputs.tag }}"
+          docker tag library-app:${{ steps.meta.outputs.tag }} $IMAGE_TAG
+          
+          for i in 1 2 3; do
+            echo "Попытка пуша #$i..."
+            if docker push $IMAGE_TAG; then
+              echo "Пуш успешен!"
+              exit 0
+            else
+              echo "Попытка #$i не удалась. Ждем 10 секунд..."
+              sleep 10
+            fi
+          done
+          
+          echo "Все попытки пуша провалились."
+          exit 1
 
   deploy:
     runs-on: self-hosted
