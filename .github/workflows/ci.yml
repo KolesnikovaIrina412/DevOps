@@ -39,6 +39,13 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v4
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
       - name: Install dependencies
         run: pip install --break-system-packages -r requirements.txt
       - name: Run Tests
@@ -67,6 +74,13 @@ jobs:
           --health-retries 5
     steps:
       - uses: actions/checkout@v4
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
       - name: Install dependencies
         run: pip install --break-system-packages -r requirements.txt
       - name: Check migrations
@@ -83,8 +97,22 @@ jobs:
       - uses: actions/checkout@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
       - name: Build Docker image
         run: docker build --no-cache -t library-app:${{ github.sha }} .
+      - name: Cache Trivy DB
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/trivy
+          key: ${{ runner.os }}-trivy-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-trivy-
       - name: Security scan of image (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
@@ -105,3 +133,30 @@ jobs:
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           docker tag library-app:${{ github.sha }} ghcr.io/$REPO_LOWER/library-app:${{ github.sha }}
           docker push ghcr.io/$REPO_LOWER/library-app:${{ github.sha }}
+
+  deploy:
+    runs-on: self-hosted
+    needs: build-and-publish
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: Deploy to target server
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            cd /home/appuser/DevOps_CD
+            # Обновляем тег образа в docker-compose.yml
+            sed -i "s|image: ghcr.io/kaplan-m/devops/library-app:.*|image: ghcr.io/kaplan-m/devops/library-app:${{ github.sha }}|" docker-compose.yml
+            # Скачиваем новый образ и перезапускаем контейнеры
+            docker compose pull app
+            docker compose up -d --no-build
+            # Даем время на запуск
+            sleep 10
+            # Проверка healthcheck
+            curl -f http://localhost:5001/health || exit 1
+          EOF
