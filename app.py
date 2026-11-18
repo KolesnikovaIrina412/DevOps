@@ -65,9 +65,11 @@ def health():
 
     return jsonify(status), http_code
 
+
 @app.route('/version')
 def version():
     return jsonify({'version': __version__})
+
 
 @app.errorhandler(400)
 def bad_request(e):
