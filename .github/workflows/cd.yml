@@ -16,6 +16,10 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: deploy-${{ github.event.inputs.tag || github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: self-hosted
@@ -26,6 +30,7 @@ jobs:
       github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
+
       - name: Determine tag
         id: meta
         run: |
@@ -34,12 +39,22 @@ jobs:
           else
             echo "tag=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT
           fi
+
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Save previous tag
+        id: prev
+        run: |
+          PREV_TAG=$(ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "grep -oP 'library-app:\K.*' /home/appuser/DevOps_CD/docker-compose.yml" | tr -d '\r')
+          echo "tag=${PREV_TAG}" >> $GITHUB_OUTPUT
+          echo "Предыдущий тег: ${PREV_TAG}"
+
       - name: Deploy to target server
         run: |
           ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
@@ -50,6 +65,53 @@ jobs:
             docker compose up -d --no-build
             sleep 10
             docker compose ps
+            curl -f http://localhost:5001/health || exit 1
+            curl -f http://localhost:5001/version || exit 1
+          EOF
+
+      - name: Check main scenario
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            RESPONSE=$(curl -s -w "\n%{http_code}" "http://localhost:5001/?years=2018")
+            BODY=$(echo "$RESPONSE" | head -n -1)
+            CODE=$(echo "$RESPONSE" | tail -n 1)
+            echo "HTTP $CODE"
+            echo "$BODY" | head -n 40
+
+            [ "$CODE" = "200" ] || { echo "Основной сценарий: неверный HTTP-код $CODE"; exit 1; }
+            echo "$BODY" | grep -q 'books_list\|book' || { echo "Основной сценарий: страница не похожа на список книг"; exit 1; }
+
+            OTHER_YEARS=$(echo "$BODY" | grep -oP '(?<=<td>)\d{4}(?=</td>)' | grep -v '^2018$' || true)
+            if [ -n "$OTHER_YEARS" ]; then
+              echo "Основной сценарий: в выдаче есть книги не за 2018 год: $OTHER_YEARS"
+              exit 1
+            fi
+
+            BOOK_ID=$(echo "$BODY" | grep -oP '/book/\K[0-9]+' | head -n 1 || true)
+            if [ -n "$BOOK_ID" ]; then
+              curl -f "http://localhost:5001/book/${BOOK_ID}" > /dev/null || { echo "Основной сценарий: книга /book/${BOOK_ID} не открывается"; exit 1; }
+              echo "Основной сценарий: книга /book/${BOOK_ID} открывается"
+            fi
+
+            echo "Основной сценарий: OK"
+          EOF
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          PREV_TAG="${{ steps.prev.outputs.tag }}"
+          if [ -z "$PREV_TAG" ] || [ "$PREV_TAG" == "latest" ]; then
+            echo "Не удалось определить предыдущий тег — откат пропущен"
+            exit 0
+          fi
+          echo "Откат на предыдущий тег: ${PREV_TAG}"
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << EOF
+            cd /home/appuser/DevOps_CD
+            sed -i "s|image: ghcr.io/kaplan-m/devops/library-app:.*|image: ghcr.io/kaplan-m/devops/library-app:${PREV_TAG}|" docker-compose.yml
+            echo "${{ secrets.GHCR_PUSH_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker compose pull app
+            docker compose up -d --no-build
+            sleep 10
             curl -f http://localhost:5001/health || exit 1
             curl -f http://localhost:5001/version || exit 1
           EOF
