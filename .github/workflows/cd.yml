@@ -1,0 +1,53 @@
+name: CD Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег образа для деплоя (например, v0.6.0 или sha)'
+        required: true
+        default: 'latest'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Determine tag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: Deploy to target server
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+            cd /home/appuser/DevOps_CD
+            sed -i "s|image: ghcr.io/kaplan-m/devops/library-app:.*|image: ghcr.io/kaplan-m/devops/library-app:${{ steps.meta.outputs.tag }}|" docker-compose.yml
+            echo "${{ secrets.GHCR_PUSH_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker compose pull app
+            docker compose up -d --no-build
+            sleep 10
+            docker compose ps
+            curl -f http://localhost:5001/health || exit 1
+            curl -f http://localhost:5001/version || exit 1
+          EOF
