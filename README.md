@@ -24,55 +24,57 @@
 - **Trivy** — сканер уязвимостей контейнеров
 
 ## Структура проекта
-````
+
+```
 app/
 ├── .github/
-│ └── workflows/
-│ └── ci.yml # CI/CD пайплайн (GitHub Actions)
+│   └── workflows/
+│       ├── ci.yml          # CI-пайплайн (GitHub Actions)
+│       └── cd.yml          # CD-пайплайн (деплой по тегам)
 ├── instance/
-│ └── .gitkeep
-├── migrations/ # миграции Alembic
-│ ├── versions/ # файлы миграций
-│ ├── env.py # настройка окружения Alembic
-│ ├── script.py.mako
-│ └── README
+│   └── .gitkeep
+├── migrations/             # миграции Alembic
+│   ├── versions/           # файлы миграций
+│   ├── env.py              # настройка окружения Alembic
+│   ├── script.py.mako
+│   └── README
 ├── scripts/
-│ ├── backup.sh # резервное копирование БД
-│ ├── restore.sh # восстановление БД
-│ └── deploy.sh # развёртывание приложения
+│   ├── backup.sh           # резервное копирование БД
+│   ├── restore.sh          # восстановление БД
+│   └── deploy.sh           # развёртывание приложения
 ├── static/
-│ ├── images/ # обложки и аватары
-│ └── styles.css
+│   ├── images/             # обложки и аватары
+│   └── styles.css
 ├── templates/
-│ ├── 400.html, 403.html, 404.html, 413.html, 500.html
-│ ├── base.html
-│ ├── book_branches.html
-│ ├── book_form.html
-│ ├── book_view.html
-│ ├── books_list.html
-│ └── login.html
+│   ├── 400.html, 403.html, 404.html, 413.html, 500.html
+│   ├── base.html
+│   ├── book_branches.html
+│   ├── book_form.html
+│   ├── book_view.html
+│   ├── books_list.html
+│   └── login.html
 ├── tests/
-│ ├── conftest.py # фикстуры, тестовое приложение
-│ ├── test_unit.py # unit + integration
-│ └── test_edge_cases.py # границы и правила
-├── app.py # точка входа, маршруты, /health
-├── auth.py # blueprint аутентификации
-├── books.py # blueprint книг и филиалов
-├── config.py # конфигурация из .env
-├── models.py # модели SQLAlchemy
-├── version.py # версия приложения
-├── Dockerfile # инструкция сборки контейнера
-├── docker-compose.yml # конфигурация для локального запуска
-├── Makefile # команды управления
-├── alembic.ini # конфигурация Alembic
-├── pyproject.toml # конфигурация pytest + coverage
+│   ├── conftest.py         # фикстуры, тестовое приложение
+│   ├── test_unit.py        # unit + integration
+│   └── test_edge_cases.py  # границы и правила
+├── app.py                  # точка входа, маршруты, /health, /version
+├── auth.py                 # blueprint аутентификации
+├── books.py                # blueprint книг и филиалов
+├── config.py               # конфигурация из .env
+├── models.py               # модели SQLAlchemy
+├── version.py              # версия приложения
+├── Dockerfile              # инструкция сборки контейнера
+├── docker-compose.yml      # конфигурация для локального запуска
+├── Makefile                # команды управления
+├── alembic.ini             # конфигурация Alembic
+├── pyproject.toml          # конфигурация pytest + coverage
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
 ├── README.md
 ├── CONTRIBUTING.md
 └── SECURITY.md
-````
+```
 
 ## Установка и запуск (локально)
 
@@ -172,21 +174,34 @@ make container-check # проверка Dockerfile и docker-compose
 - `bandit` — **0 issues**.
 - `pytest` — **все тесты пройдены**.
 
-## CI/CD Пайплайн (Continuous Integration)
+## CI/CD Пайплайн (Continuous Integration / Continuous Delivery)
 
-Проект использует **GitHub Actions** для автоматизации проверок и сборки. Пайплайн запускается при каждом `push` и `pull_request` в ветку `main`.
+Проект использует **GitHub Actions** для автоматизации проверок, сборки и развертывания. Настроены два независимых пайплайна:
 
-Конфигурация пайплайна находится в `.github/workflows/ci.yml`.
+### CI Pipeline (Continuous Integration)
+Запускается при каждом `push` в `main` и при `pull_request`.
+Конфигурация: `.github/workflows/ci.yml`.
 
-### Стадии пайплайна:
-
+**Стадии:**
 1.  **`lint`** — проверка стиля кода (`flake8`) и статический анализ безопасности (`bandit`).
 2.  **`test`** — запуск unit и интеграционных тестов (`pytest`) с проверкой покрытия. В качестве тестовой БД автоматически поднимается контейнер `postgres:17`.
 3.  **`migrate`** — проверка применения миграций Alembic к чистой базе данных.
 4.  **`build-and-publish`**:
     *   Сборка Docker-образа.
     *   Сканирование образа на уязвимости с помощью **Trivy** (пайплайн падает при обнаружении CRITICAL/HIGH уязвимостей).
-    *   Публикация образа в **GitHub Container Registry (GHCR)** с тегом, соответствующим `commit SHA`.
+    *   Публикация образа в **GitHub Container Registry (GHCR)** с тегом, соответствующим `commit SHA` (или тегу релиза, если это пуш тега).
+
+### CD Pipeline (Continuous Delivery)
+Запускается при пуше тега (`v*`) или вручную (`workflow_dispatch`).
+Конфигурация: `.github/workflows/cd.yml`.
+
+**Стадии:**
+1.  **`deploy`**:
+    *   Подключение к целевому серверу (`app-server`) по SSH.
+    *   Скачивание готового Docker-образа из GHCR (без пересборки).
+    *   Развертывание на предэксплуатационном окружении (порт `5001`).
+    *   Проверка контейнеров (`docker compose ps`), healthcheck (`/health`) и версии (`/version`).
+    *   Поддержка ручного откката через `workflow_dispatch` с указанием предыдущего тега.
 
 ### Self-hosted Runner
 Все проверки выполняются на собственном сервере-раннере (Self-hosted Runner), настроенном на базе Debian Linux, что позволяет использовать кэш Docker и выполнять проверки в изолированном окружении.
@@ -295,7 +310,7 @@ make restore    # восстановление БД из дампа (на db-ser
 ```json
 {
   "status": "ok",
-  "version": "0.5.0",
+  "version": "0.6.1",
   "database": "ok",
   "auth_database": "ok"
 }
@@ -306,7 +321,7 @@ make restore    # восстановление БД из дампа (на db-ser
 ```json
 {
   "status": "error",
-  "version": "0.5.0",
+  "version": "0.6.1",
   "database": "error: ...",
   "auth_database": "ok"
 }
@@ -462,4 +477,4 @@ erDiagram
 
 ## Лицензия
 
-Учебный проект. Лабораторные работы №1, №2, №3, №4, №5 по дисциплине «Методология и практики DevOps».
+Учебный проект. Лабораторные работы №1, №2, №3, №4, №5, №6 по дисциплине «Методология и практики DevOps».
