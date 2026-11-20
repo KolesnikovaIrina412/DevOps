@@ -1,9 +1,10 @@
 name: CD Pipeline
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
   workflow_dispatch:
     inputs:
       tag:
@@ -15,13 +16,14 @@ permissions:
   contents: read
   packages: write
 
-concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   deploy:
     runs-on: self-hosted
+    if: |
+      (github.event_name == 'workflow_run' && 
+       github.event.workflow_run.event == 'push' && 
+       startsWith(github.event.workflow_run.head_branch, 'v')) ||
+      github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
       - name: Determine tag
@@ -30,7 +32,7 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
           else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "tag=${{ github.event.workflow_run.head_branch }}" >> $GITHUB_OUTPUT
           fi
       - name: Setup SSH
         run: |
