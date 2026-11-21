@@ -62,7 +62,8 @@ jobs:
             sed -i "s|image: ghcr.io/kaplan-m/devops/library-app:.*|image: ghcr.io/kaplan-m/devops/library-app:${{ steps.meta.outputs.tag }}|" docker-compose.yml
             echo "${{ secrets.GHCR_PUSH_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull app
-            docker compose up -d --no-build
+            docker image inspect ghcr.io/kaplan-m/devops/library-app:${{ steps.meta.outputs.tag }} >/dev/null || { echo "Образ не найден в registry"; exit 1; }
+            docker compose up -d --no-build --force-recreate
             sleep 10
             docker compose ps
             curl -f http://localhost:5001/health || exit 1
@@ -112,7 +113,7 @@ jobs:
             sed -i "s|image: ghcr.io/kaplan-m/devops/library-app:.*|image: ghcr.io/kaplan-m/devops/library-app:${PREV_TAG}|" docker-compose.yml
             echo "${{ secrets.GHCR_PUSH_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull app
-            docker compose up -d --no-build
+            docker compose up -d --no-build --force-recreate
             sleep 10
             curl -f http://localhost:5001/health || exit 1
             curl -f http://localhost:5001/version || exit 1
