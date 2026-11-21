@@ -310,7 +310,7 @@ make restore    # восстановление БД из дампа (на db-ser
 ```json
 {
   "status": "ok",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "database": "ok",
   "auth_database": "ok"
 }
@@ -321,7 +321,7 @@ make restore    # восстановление БД из дампа (на db-ser
 ```json
 {
   "status": "error",
-  "version": "0.6.1",
+  "version": "0.6.3",
   "database": "error: ...",
   "auth_database": "ok"
 }
