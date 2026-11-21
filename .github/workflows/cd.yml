@@ -59,10 +59,11 @@ jobs:
         run: |
           ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
             cd /home/appuser/DevOps_CD
-            sed -i "s|image: ghcr.io/kaplan-m/devops/library-app:.*|image: ghcr.io/kaplan-m/devops/library-app:${{ steps.meta.outputs.tag }}|" docker-compose.yml
+            REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+            sed -i "s|image: ghcr.io/.*/library-app:.*|image: ghcr.io/${REPO_LOWER}/library-app:${{ steps.meta.outputs.tag }}|" docker-compose.yml
             echo "${{ secrets.GHCR_PUSH_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull app
-            docker image inspect ghcr.io/kaplan-m/devops/library-app:${{ steps.meta.outputs.tag }} >/dev/null || { echo "Образ не найден в registry"; exit 1; }
+            docker image inspect ghcr.io/${REPO_LOWER}/library-app:${{ steps.meta.outputs.tag }} >/dev/null || { echo "Образ не найден в registry"; exit 1; }
             docker compose up -d --no-build --force-recreate
             sleep 10
             docker compose ps
@@ -110,7 +111,8 @@ jobs:
           echo "Откат на предыдущий тег: ${PREV_TAG}"
           ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << EOF
             cd /home/appuser/DevOps_CD
-            sed -i "s|image: ghcr.io/kaplan-m/devops/library-app:.*|image: ghcr.io/kaplan-m/devops/library-app:${PREV_TAG}|" docker-compose.yml
+            REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+            sed -i "s|image: ghcr.io/.*/library-app:.*|image: ghcr.io/${REPO_LOWER}/library-app:${PREV_TAG}|" docker-compose.yml
             echo "${{ secrets.GHCR_PUSH_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             docker compose pull app
             docker compose up -d --no-build --force-recreate
